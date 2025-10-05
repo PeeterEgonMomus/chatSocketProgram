@@ -1,0 +1,1 @@
+org.example.chat.commands.BroadcastCommand
