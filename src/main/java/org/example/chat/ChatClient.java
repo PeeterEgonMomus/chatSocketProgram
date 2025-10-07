@@ -1,6 +1,7 @@
 package org.example.chat;
 
 import org.example.chat.security.RSAClient;
+import org.example.chat.security.AESEncryption;
 import org.example.chat.util.Logger;
 
 import java.io.*;
@@ -16,7 +17,7 @@ public class ChatClient {
     }
 
     public void start() {
-        RSAClient rsaClient = new RSAClient();
+        final RSAClient rsaClient = new RSAClient();
 
         try (Socket socket = new Socket(host, port);
              BufferedReader serverIn = new BufferedReader(new InputStreamReader(socket.getInputStream()));
@@ -25,34 +26,43 @@ public class ChatClient {
 
             System.out.println("Connected to chat server at " + host + ":" + port);
 
-            // 1) read server's PUBLIC_KEY line (handshake)
+            // === Step 1: Receive server's RSA public key ===
             String firstLine = serverIn.readLine();
-            if (firstLine != null && firstLine.startsWith("PUBLIC_KEY:")) {
-                String serverPub = firstLine.substring("PUBLIC_KEY:".length()).trim();
-                rsaClient.setServerPublicKeyBase64(serverPub);
-                Logger.debug("Received server public key.");
-            } else {
-                System.err.println("Protocol error: expected PUBLIC_KEY from server first.");
+            if (firstLine == null || !firstLine.startsWith("PUBLIC_KEY:")) {
+                System.err.println("Protocol error: expected PUBLIC_KEY from server.");
                 return;
             }
+            String serverPub = firstLine.substring("PUBLIC_KEY:".length()).trim();
+            rsaClient.setServerPublicKeyBase64(serverPub);
+            Logger.debug("Received server public key.");
 
-            // 2) send our client public key to server (plaintext)
+            // === Step 2: Send our public key ===
             String clientPubBase64 = rsaClient.getPublicKeyBase64();
             serverOut.println("CLIENT_KEY:" + clientPubBase64);
             Logger.debug("Sent CLIENT_KEY to server.");
 
-            // Thread to read messages from server and decrypt them using client's private key
+            // === Step 3: Generate AES session key ===
+            String aesKeyBase64 = AESEncryption.generateKeyBase64();
+            Logger.debug("Generated AES session key.");
+
+            // === Step 4: Encrypt AES key with RSA and send ===
+            String encryptedAESKey = rsaClient.encryptForServer(aesKeyBase64);
+            serverOut.println("AES_KEY:" + encryptedAESKey);
+            Logger.debug("Sent AES_KEY to server (encrypted with RSA).");
+
+            final String finalAesKey = aesKeyBase64;
+            final BufferedReader finalServerIn = serverIn;
+
+            // === Step 5: Reader thread (AES decrypt) ===
             Thread readerThread = new Thread(() -> {
                 String line;
                 try {
-                    while ((line = serverIn.readLine()) != null) {
-                        // messages from server to this client should be encrypted with client's public key
+                    while ((line = finalServerIn.readLine()) != null) {
                         try {
-                            String decrypted = rsaClient.decrypt(line);
+                            String decrypted = AESEncryption.decryptWithKeyBase64(finalAesKey, line);
                             System.out.println(decrypted);
-                        } catch (RuntimeException e) {
-                            // Could be plaintext or error; show raw for debugging
-                            Logger.error("Failed to decrypt server message; showing raw", e);
+                        } catch (Exception e) {
+                            Logger.error("Failed to decrypt message; showing raw", e);
                             System.out.println("(raw) " + line);
                         }
                     }
@@ -63,10 +73,10 @@ public class ChatClient {
             readerThread.setDaemon(true);
             readerThread.start();
 
-            // Main loop to send user input to server (encrypt with server public key)
+            // === Step 6: Main send loop (AES encrypt) ===
             String input;
             while ((input = userIn.readLine()) != null) {
-                String encrypted = rsaClient.encryptForServer(input);
+                String encrypted = AESEncryption.encryptWithKeyBase64(finalAesKey, input);
                 serverOut.println(encrypted);
             }
 

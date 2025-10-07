@@ -32,8 +32,8 @@ public class ClientHandler implements Runnable {
 
             String input;
             while ((input = in.readLine()) != null) {
+                // handshake step: client public key
                 if (input.startsWith("CLIENT_KEY:")) {
-                    // client is sending its public key in base64 (plaintext) as part of handshake
                     String clientKeyBase64 = input.substring("CLIENT_KEY:".length()).trim();
                     this.clientPublicKey = clientKeyBase64;
                     server.registerClientPublicKey(this, clientKeyBase64);
@@ -41,34 +41,55 @@ public class ClientHandler implements Runnable {
                     continue;
                 }
 
-                // All other inbound messages are expected to be encrypted with server public key
-                try {
-                    String decrypted = encryptionService.decrypt(input);
-                    Logger.debug("Decrypted input from client " + socket.getRemoteSocketAddress() + ": " + (decrypted.length() > 80 ? decrypted.substring(0,80) + "..." : decrypted));
-                    server.getRegistry().executeCommand(this, decrypted);
-                } catch (RuntimeException e) {
-                    // decrypt failure (bad padding etc.)
-                    Logger.error("Failed to decrypt client message", e);
-                    // optionally send error back to client (plaintext) or ignore
-                    out.println("ERROR: unable to decrypt message");
+                // handshake step (HYBRID): client sends its AES key encrypted with server RSA pub
+                if (input.startsWith("AES_KEY:")) {
+                    String encryptedAESKey = input.substring("AES_KEY:".length()).trim();
+                    encryptionService.registerClientAESKey(this, encryptedAESKey);
+                    Logger.debug("Registered AES session key for " + socket.getRemoteSocketAddress());
+                    // Ack that AES is set (server encrypts ack with AES if possible)
+                    try {
+                        String ack = "AES_OK";
+                        String cipher = encryptionService.encryptForClient(this, ack, clientPublicKey);
+                        out.println(cipher);
+                    } catch (Exception e) {
+                        out.println("ERROR: AES registration failed");
+                    }
+                    continue;
                 }
+
+                // decrypt payload (uses AES if registered, otherwise server RSA decrypt)
+                String decrypted;
+                try {
+                    decrypted = encryptionService.decryptFromClient(this, input);
+                } catch (RuntimeException e) {
+                    Logger.error("Failed to decrypt incoming payload", e);
+                    out.println("ERROR: unable to decrypt message");
+                    continue;
+                }
+
+                Logger.debug("Decrypted input from client " + socket.getRemoteSocketAddress() + ": " +
+                        (decrypted.length() > 80 ? decrypted.substring(0,80) + "..." : decrypted));
+                server.getRegistry().executeCommand(this, decrypted);
             }
         } catch (IOException e) {
             Logger.error("Client disconnected: " + e.getMessage(), e);
             server.removeClient(this);
+        } finally {
+            encryptionService.removeClient(this);
         }
     }
 
     /**
-     * Send a message to this client. If client has provided a public key,
-     * encrypt for that client. Otherwise send plaintext (fallback).
+     * Send a message to this client. If client has provided an AES key, it will encrypt with AES.
+     * Otherwise it falls back to RSA with the client's public key (if available).
      */
     public void send(String message) {
-        if (clientPublicKey != null) {
-            String cipher = server.getEncryptionService().encryptWithPublicKey(message, clientPublicKey);
+        try {
+            String cipher = encryptionService.encryptForClient(this, message, clientPublicKey);
             out.println(cipher);
-        } else {
-            // fallback - no client key yet (should only happen early)
+        } catch (Exception e) {
+            // if encryption failed, fallback to plaintext for debugging (not recommended in production)
+            Logger.error("Failed to encrypt outbound message, sending plaintext fallback", e);
             out.println(message);
         }
     }
