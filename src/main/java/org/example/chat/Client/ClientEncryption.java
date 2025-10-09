@@ -1,4 +1,4 @@
-package org.example.chat;
+package org.example.chat.Client;
 
 import org.example.chat.util.Logger;
 
@@ -6,13 +6,12 @@ import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
-public class ClientEncryption {
+public class ClientEncryption implements ClientCrypto {
     private PublicKey serverPublicKey;
     private final KeyPair clientKeyPair; // RSA keys
     private SecretKey aesKey; // AES session key
@@ -28,7 +27,7 @@ public class ClientEncryption {
         Logger.info("Client RSA key pair generated successfully.");
     }
 
-    // Set server RSA public key from Base64
+    @Override
     public void setServerPublicKeyBase64(String serverPubBase64) throws Exception {
         Logger.debug("Setting server public key (Base64 length=" + serverPubBase64.length() + ")");
         byte[] decoded = Base64.getDecoder().decode(serverPubBase64);
@@ -37,13 +36,14 @@ public class ClientEncryption {
         Logger.info("Server public key successfully set.");
     }
 
+    @Override
     public String getPublicKeyBase64() {
         String pub = Base64.getEncoder().encodeToString(clientKeyPair.getPublic().getEncoded());
         Logger.debug("Client public key exported (Base64 length=" + pub.length() + ")");
         return pub;
     }
 
-    // Generate AES session key
+    @Override
     public String generateAESKeyBase64() throws Exception {
         Logger.info("Generating AES-256 session key...");
         KeyGenerator keyGen = KeyGenerator.getInstance("AES");
@@ -54,16 +54,18 @@ public class ClientEncryption {
         return base64;
     }
 
+    @Override
     public void markAESReady() {
         aesReady = true;
         Logger.info("AES session is now marked as ready.");
     }
 
+    @Override
     public boolean isAESReady() {
         return aesReady;
     }
 
-    /** Encrypt data with server RSA (for AES key) */
+    @Override
     public String encryptForServerRSA(String dataBase64) throws Exception {
         if (serverPublicKey == null) {
             Logger.error("Server public key not set before RSA encryption", new IllegalStateException());
@@ -78,7 +80,7 @@ public class ClientEncryption {
         return out;
     }
 
-    /** Encrypt messages using AES/GCM if ready, else fallback to RSA */
+    @Override
     public String encryptForServer(String message) throws Exception {
         if (aesReady) {
             Logger.debug("Encrypting message with AES/GCM...");
@@ -104,7 +106,7 @@ public class ClientEncryption {
         }
     }
 
-    /** Decrypt messages from server using AES/GCM */
+    @Override
     public String decryptFromServer(String payload) throws Exception {
         if (!aesReady) throw new IllegalStateException("AES not ready");
         Logger.debug("Decrypting message from server using AES/GCM...");
