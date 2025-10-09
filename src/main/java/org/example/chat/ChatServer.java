@@ -5,7 +5,9 @@ import org.example.chat.auth.UserStore;
 import org.example.chat.auth.policy.*;
 import org.example.chat.commands.*;
 import org.example.chat.security.EncryptionService;
+import org.example.chat.security.HybridEncryption;
 import org.example.chat.security.RSAEncryption;
+import org.example.chat.util.Logger;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -35,16 +37,18 @@ public class ChatServer {
 
     public void start(int port) throws IOException {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
-            System.out.println("Chat server started on port " + port);
+            Logger.info("Chat server started on port " + port);
 
             while (true) {
                 Socket socket = serverSocket.accept();
+                Logger.info("New client connected: " + socket.getRemoteSocketAddress());
                 ClientHandler client = new ClientHandler(socket, this, encryptionService);
                 clients.add(client);
                 new Thread(client).start();
             }
         }
     }
+
 
     /**
      * Broadcast message to all clients except sender.
@@ -77,7 +81,7 @@ public class ChatServer {
     }
 
     public static void main(String[] args) throws IOException {
-        EncryptionService encryption = new EncryptionService(new RSAEncryption());
+        EncryptionService encryption = new EncryptionService(new HybridEncryption(new RSAEncryption())); // use your new implementation
         new ChatServer(encryption).start(12345);
     }
 }

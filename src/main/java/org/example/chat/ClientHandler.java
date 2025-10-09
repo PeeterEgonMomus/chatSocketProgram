@@ -44,13 +44,14 @@ public class ClientHandler implements Runnable {
                 // handshake step (HYBRID): client sends its AES key encrypted with server RSA pub
                 if (input.startsWith("AES_KEY:")) {
                     String encryptedAESKey = input.substring("AES_KEY:".length()).trim();
+                    Logger.debug("aes key received from client!!!!!!!!!!" + encryptedAESKey);
                     encryptionService.registerClientAESKey(this, encryptedAESKey);
                     Logger.debug("Registered AES session key for " + socket.getRemoteSocketAddress());
                     // Ack that AES is set (server encrypts ack with AES if possible)
                     try {
                         String ack = "AES_OK";
-                        String cipher = encryptionService.encryptForClient(this, ack, clientPublicKey);
-                        out.println(cipher);
+                        out.println(ack); // send plaintext so client will mark AES ready
+                        Logger.debug("Sent plaintext AES_OK ack to client " + socket.getRemoteSocketAddress());
                     } catch (Exception e) {
                         out.println("ERROR: AES registration failed");
                     }
