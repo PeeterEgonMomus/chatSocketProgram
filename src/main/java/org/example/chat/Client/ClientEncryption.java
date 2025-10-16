@@ -65,6 +65,10 @@ public class ClientEncryption implements ClientCrypto {
         return aesReady;
     }
 
+    SecretKey getAESKey() {
+        return aesKey;
+    }
+
     @Override
     public String encryptForServerRSA(String dataBase64) throws Exception {
         if (serverPublicKey == null) {

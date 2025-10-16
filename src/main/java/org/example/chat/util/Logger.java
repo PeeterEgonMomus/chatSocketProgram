@@ -26,8 +26,7 @@ public class Logger {
         PrintWriter w = null;
         try {
             OutputStream os = new FileOutputStream(logPath, true); // append mode
-            w = new PrintWriter(new BufferedWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8)), true); // autoFlush true
-            // write a startup marker
+            w = new PrintWriter(new BufferedWriter(new OutputStreamWriter(os, StandardCharsets.UTF_8)), true);
             w.println();
             w.println("==== LOG START " + LocalDateTime.now() + " ====");
             w.flush();
@@ -37,7 +36,6 @@ public class Logger {
         }
         fileWriter = w;
 
-        // ensure file is closed on shutdown
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             synchronized (LOCK) {
                 if (fileWriter != null) {
@@ -57,9 +55,20 @@ public class Logger {
         log("DEBUG", message);
     }
 
+    /**
+     * Logs an error message with optional exception.
+     */
     public static void error(String message, Exception e) {
+        if (e == null) {
+            // just log the message
+            log("ERROR", message);
+            return;
+        }
+
+        // log message + exception message
         log("ERROR", message + " - " + e.getMessage());
-        // print stacktrace to both console and file
+
+        // print stack trace to both console and file
         synchronized (LOCK) {
             e.printStackTrace(System.out);
             if (fileWriter != null) {
@@ -69,13 +78,18 @@ public class Logger {
         }
     }
 
+    /**
+     * Convenience overload when no exception is available.
+     */
+    public static void error(String message) {
+        error(message, null);
+    }
+
     private static void log(String level, String message) {
         String timestamp = LocalDateTime.now().format(FORMATTER);
         String line = String.format("[%s] [%s] %s", timestamp, level, message);
         synchronized (LOCK) {
-            // console
             System.out.println(line);
-            // file
             if (fileWriter != null) {
                 fileWriter.println(line);
                 fileWriter.flush();

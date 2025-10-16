@@ -115,4 +115,9 @@ public class ClientHandler implements Runnable {
     public boolean isAuthenticated() {
         return username != null && !username.isEmpty();
     }
+
+    public Socket getSocket() {
+        return socket;
+    }
+
 }
