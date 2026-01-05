@@ -18,6 +18,7 @@ public class BroadcastCommand implements Command {
     @Override
     public void execute(ClientHandler client, String[] args) {
         String message = String.join(" ", args);
-        client.getServer().broadcast(client, message);
+        client.broadcast(message);
     }
+
 }

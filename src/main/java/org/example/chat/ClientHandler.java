@@ -1,18 +1,28 @@
 package org.example.chat;
 
+import org.example.chat.protocol.Frame;
+import org.example.chat.protocol.FrameDecoder;
+import org.example.chat.protocol.FrameEncoder;
+import org.example.chat.protocol.FrameType;
 import org.example.chat.security.EncryptionService;
 import org.example.chat.util.Logger;
 
 import java.io.*;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 
 public class ClientHandler implements Runnable {
+
     private final Socket socket;
     private final ChatServer server;
     private final EncryptionService encryptionService;
-    private PrintWriter out;
+
+    private OutputStream rawOut;
+    private InputStream rawIn;
+
+    private boolean aesReady = false;
     private String username;
-    private String clientPublicKey; // base64 public key of this client
+    private String clientPublicKey;
 
     public ClientHandler(Socket socket, ChatServer server, EncryptionService encryptionService) {
         this.socket = socket;
@@ -22,81 +32,128 @@ public class ClientHandler implements Runnable {
 
     @Override
     public void run() {
-        try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
-            out = new PrintWriter(socket.getOutputStream(), true);
+        try {
+            rawIn = socket.getInputStream();
+            rawOut = socket.getOutputStream();
 
-            // 1) immediately send server public key to client (plaintext)
+            BufferedReader textIn =
+                    new BufferedReader(new InputStreamReader(rawIn, StandardCharsets.UTF_8));
+            PrintWriter textOut =
+                    new PrintWriter(new OutputStreamWriter(rawOut, StandardCharsets.UTF_8), true);
+
+            /* ================= HANDSHAKE (PLAINTEXT) ================= */
+
             String serverPub = server.getEncryptionService().getServerPublicKeyBase64();
-            out.println("PUBLIC_KEY:" + serverPub);
-            Logger.debug("Sent PUBLIC_KEY to client " + socket.getRemoteSocketAddress());
+            textOut.println("PUBLIC_KEY:" + serverPub);
+            Logger.debug("Sent PUBLIC_KEY to " + socket.getRemoteSocketAddress());
 
-            String input;
-            while ((input = in.readLine()) != null) {
-                // handshake step: client public key
-                if (input.startsWith("CLIENT_KEY:")) {
-                    String clientKeyBase64 = input.substring("CLIENT_KEY:".length()).trim();
-                    this.clientPublicKey = clientKeyBase64;
-                    server.registerClientPublicKey(this, clientKeyBase64);
-                    Logger.debug("Registered client public key for " + socket.getRemoteSocketAddress());
+            String line;
+            while (!aesReady && (line = textIn.readLine()) != null) {
+
+                if (line.startsWith("CLIENT_KEY:")) {
+                    clientPublicKey = line.substring("CLIENT_KEY:".length()).trim();
+                    Logger.debug("Registered client public key");
                     continue;
                 }
 
-                // handshake step (HYBRID): client sends its AES key encrypted with server RSA pub
-                if (input.startsWith("AES_KEY:")) {
-                    String encryptedAESKey = input.substring("AES_KEY:".length()).trim();
-                    Logger.debug("aes key received from client!!!!!!!!!!" + encryptedAESKey);
-                    encryptionService.registerClientAESKey(this, encryptedAESKey);
-                    Logger.debug("Registered AES session key for " + socket.getRemoteSocketAddress());
-                    // Ack that AES is set (server encrypts ack with AES if possible)
-                    try {
-                        String ack = "AES_OK";
-                        out.println(ack); // send plaintext so client will mark AES ready
-                        Logger.debug("Sent plaintext AES_OK ack to client " + socket.getRemoteSocketAddress());
-                    } catch (Exception e) {
-                        out.println("ERROR: AES registration failed");
-                    }
-                    continue;
+                if (line.startsWith("AES_KEY:")) {
+                    String encryptedAES = line.substring("AES_KEY:".length()).trim();
+                    encryptionService.registerClientAESKey(this, encryptedAES);
+                    textOut.println("AES_OK");
+                    aesReady = true;
+                    Logger.debug("AES handshake completed");
                 }
-
-                // decrypt payload (uses AES if registered, otherwise server RSA decrypt)
-                String decrypted;
-                try {
-                    decrypted = encryptionService.decryptFromClient(this, input);
-                } catch (RuntimeException e) {
-                    Logger.error("Failed to decrypt incoming payload", e);
-                    out.println("ERROR: unable to decrypt message");
-                    continue;
-                }
-
-                Logger.debug("Decrypted input from client " + socket.getRemoteSocketAddress() + ": " +
-                        (decrypted.length() > 80 ? decrypted.substring(0,80) + "..." : decrypted));
-                server.getRegistry().executeCommand(this, decrypted);
             }
+
+            /* ================= FRAME LOOP (AES) ================= */
+
+            while (true) {
+                Frame frame = FrameDecoder.read(rawIn);
+                if (frame == null) break;
+
+                handleFrame(frame);
+            }
+
         } catch (IOException e) {
-            Logger.error("Client disconnected: " + e.getMessage(), e);
-            server.removeClient(this);
+            Logger.error("Client disconnected", e);
         } finally {
             encryptionService.removeClient(this);
+            server.removeClient(this);
         }
     }
 
-    /**
-     * Send a message to this client. If client has provided an AES key, it will encrypt with AES.
-     * Otherwise it falls back to RSA with the client's public key (if available).
-     */
-    public void send(String message) {
+    /* ================= FRAME ROUTING ================= */
+
+    private void handleFrame(Frame frame) {
         try {
-            String cipher = encryptionService.encryptForClient(this, message, clientPublicKey);
-            out.println(cipher);
+            switch (frame.getType()) {
+
+                case CHAT -> {
+                    String encrypted = new String(frame.getPayload(), StandardCharsets.UTF_8);
+                    String message = encryptionService.decryptFromClient(this, encrypted);
+                    server.getRegistry().executeCommand(this, message);
+                }
+
+                case FILE_META -> {
+                    Logger.info("Received FILE_META (not handled yet)");
+                }
+
+                case FILE_CHUNK -> {
+                    Logger.info("Received FILE_CHUNK (not handled yet)");
+                }
+
+                case FILE_END -> {
+                    Logger.info("Received FILE_END (not handled yet)");
+                }
+
+                default -> {
+                    Logger.debug("Unhandled frame type: " + frame.getType());
+                }
+            }
         } catch (Exception e) {
-            // if encryption failed, fallback to plaintext for debugging (not recommended in production)
-            Logger.error("Failed to encrypt outbound message, sending plaintext fallback", e);
-            out.println(message);
+            Logger.error("Failed to handle frame " + frame.getType(), e);
         }
     }
 
-    public ChatServer getServer() {
-        return server;
+    /* ================= OUTBOUND ================= */
+
+    public void sendChat(String message) {
+        try {
+            String encrypted =
+                    encryptionService.encryptForClient(this, message, clientPublicKey);
+
+            Frame frame = new Frame(
+                    FrameType.CHAT,
+                    encrypted.getBytes(StandardCharsets.UTF_8)
+            );
+
+            FrameEncoder.write(frame, rawOut);
+        } catch (Exception e) {
+            Logger.error("Failed to send chat frame", e);
+        }
+    }
+
+    /* ================= ACCESSORS ================= */
+
+    public Socket getSocket() {
+        return socket;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+        server.getSessionManager().registerSession(username, this);
+    }
+
+    public String getClientPublicKey() {
+        return clientPublicKey;
+    }
+
+    public boolean isAuthenticated() {
+        return username != null;
     }
 
     @Override
@@ -104,20 +161,12 @@ public class ClientHandler implements Runnable {
         return username != null ? username : socket.getRemoteSocketAddress().toString();
     }
 
-    public void setUsername(String username) {
-        this.username = username;
+    public void send(String message) {
+        sendChat(message);
     }
 
-    public String getUsername() {
-        return username;
-    }
-
-    public boolean isAuthenticated() {
-        return username != null && !username.isEmpty();
-    }
-
-    public Socket getSocket() {
-        return socket;
+    public void broadcast(String message) {
+        server.broadcast(this, message);
     }
 
 }

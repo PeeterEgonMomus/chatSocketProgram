@@ -5,6 +5,7 @@ import org.example.chat.util.Logger;
 import java.io.IOException;
 
 public class HandshakeManager {
+
     private final ClientCrypto crypto;
     private final ChatConnection connection;
 
@@ -13,48 +14,38 @@ public class HandshakeManager {
         this.connection = connection;
     }
 
-    /**
-     * Perform the handshake steps synchronously:
-     * 1) read PUBLIC_KEY:...
-     * 2) send CLIENT_KEY:...
-     * 3) generate AES key and send AES_KEY: (RSA-encrypted)
-     *
-     * Returns true if handshake initiated (client side); false if failure.
-     */
     public boolean doClientHandshake() {
         try {
-            // Step 1: receive server public key
+            // 1) receive server public key
             String firstLine = connection.receive();
             if (firstLine == null || !firstLine.startsWith("PUBLIC_KEY:")) {
-                Logger.error("Server did not send public key properly",
-                        new RuntimeException("Missing PUBLIC_KEY"));
-                return false;
+                throw new IOException("Missing PUBLIC_KEY from server");
             }
 
             String serverPub = firstLine.substring("PUBLIC_KEY:".length()).trim();
             crypto.setServerPublicKeyBase64(serverPub);
-            Logger.debug("Received server public key (" + serverPub.length() + " chars)");
+            Logger.debug("Received server public key");
 
-            // Step 2: send client public key
-            String clientPub = crypto.getPublicKeyBase64();
-            connection.send("CLIENT_KEY:" + clientPub);
-            Logger.debug("Sent client public key to server");
+            // 2) send client public key
+            connection.send("CLIENT_KEY:" + crypto.getPublicKeyBase64());
+            Logger.debug("Sent client public key");
 
-            // Step 3: generate and send AES key
-            String aesKeyBase64 = crypto.generateAESKeyBase64();
-            Logger.debug("Generated AES key: " + (aesKeyBase64.length() > 20
-                    ? aesKeyBase64.substring(0, 20) + "..."
-                    : aesKeyBase64));
+            // 3) generate + send AES key
+            String aesKey = crypto.generateAESKeyBase64();
+            String encryptedAES = crypto.encryptForServerRSA(aesKey);
+            connection.send("AES_KEY:" + encryptedAES);
+            Logger.debug("Sent AES key");
 
-            String encryptedAESKey = crypto.encryptForServerRSA(aesKeyBase64);
-            Logger.debug("Encrypted AES key length: " + encryptedAESKey.length());
-            connection.send("AES_KEY:" + encryptedAESKey);
-            Logger.debug("Sent AES key to server (RSA-encrypted)");
+            // 4) wait for AES_OK (IMPORTANT)
+            String ack = connection.receive();
+            if (!"AES_OK".equals(ack)) {
+                throw new IOException("Expected AES_OK, got: " + ack);
+            }
 
+            crypto.markAESReady();
+            Logger.info("Handshake complete, AES ready");
             return true;
-        } catch (IOException e) {
-            Logger.error("I/O during handshake failed", e);
-            return false;
+
         } catch (Exception e) {
             Logger.error("Handshake failed", e);
             return false;
