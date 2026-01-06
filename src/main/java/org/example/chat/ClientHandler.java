@@ -11,7 +11,16 @@ import java.io.*;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class ClientHandler implements Runnable {
+
+    private static final int MAX_FILE_SIZE = 100_000_000; // 100 MB safeguard
+
+    private FileOutputStream currentFileOut;
+    private String currentFileName;
+    private long bytesReceived;
 
     private final Socket socket;
     private final ChatServer server;
@@ -88,32 +97,74 @@ public class ClientHandler implements Runnable {
         try {
             switch (frame.getType()) {
 
+                /* ================= CHAT ================= */
+
                 case CHAT -> {
                     String encrypted = new String(frame.getPayload(), StandardCharsets.UTF_8);
                     String message = encryptionService.decryptFromClient(this, encrypted);
                     server.getRegistry().executeCommand(this, message);
                 }
 
+                /* ================= FILE TRANSFER ================= */
+
                 case FILE_META -> {
-                    Logger.info("Received FILE_META (not handled yet)");
+                    String meta = new String(frame.getPayload(), StandardCharsets.UTF_8);
+
+                    // Very simple format: filename|size
+                    String[] parts = meta.split("\\|");
+                    if (parts.length != 2) {
+                        Logger.error("Invalid FILE_META format");
+                        return;
+                    }
+
+                    currentFileName = parts[0];
+                    long size = Long.parseLong(parts[1]);
+
+                    if (size <= 0 || size > MAX_FILE_SIZE) {
+                        Logger.error("Rejected file: invalid size " + size);
+                        return;
+                    }
+
+                    File file = new File("received_" + currentFileName);
+                    currentFileOut = new FileOutputStream(file);
+                    bytesReceived = 0;
+
+                    Logger.info("Starting file transfer: " + currentFileName +
+                            " (" + size + " bytes)");
                 }
 
                 case FILE_CHUNK -> {
-                    Logger.info("Received FILE_CHUNK (not handled yet)");
+                    if (currentFileOut == null) {
+                        Logger.error("Received FILE_CHUNK without FILE_META");
+                        return;
+                    }
+
+                    currentFileOut.write(frame.getPayload());
+                    bytesReceived += frame.getPayload().length;
+
+                    Logger.debug("Received file chunk (" +
+                            frame.getPayload().length + " bytes)");
                 }
 
                 case FILE_END -> {
-                    Logger.info("Received FILE_END (not handled yet)");
+                    if (currentFileOut != null) {
+                        currentFileOut.close();
+                        Logger.info("File transfer completed: " + currentFileName +
+                                " (" + bytesReceived + " bytes)");
+                    }
+
+                    currentFileOut = null;
+                    currentFileName = null;
+                    bytesReceived = 0;
                 }
 
-                default -> {
-                    Logger.debug("Unhandled frame type: " + frame.getType());
-                }
+                default -> Logger.debug("Unhandled frame type: " + frame.getType());
             }
         } catch (Exception e) {
             Logger.error("Failed to handle frame " + frame.getType(), e);
         }
     }
+
 
     /* ================= OUTBOUND ================= */
 
