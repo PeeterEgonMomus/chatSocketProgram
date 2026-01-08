@@ -15,6 +15,7 @@ import java.util.*;
 
 public class ChatServer {
     private final List<ClientHandler> clients = new ArrayList<>();
+    private final Map<String, PendingFile> pendingFiles = new HashMap<>();
     private final CommandRegistry registry = new CommandRegistry();
     private final UserStore userStore = new InMemoryUserStore();
     private final UserSessionManager sessionManager = new UserSessionManager();
@@ -60,6 +61,23 @@ public class ChatServer {
         clients.remove(client);
         sessionManager.getSessionBySocket(client.getSocket())
                 .ifPresent(session -> sessionManager.removeSession(session.getUsername()));
+    }
+
+    public void addPendingFile(String filename, PendingFile pendingFile) {
+        pendingFiles.put(filename, pendingFile);
+        Logger.debug("Pending file registered: " + filename);
+    }
+
+    public PendingFile getPendingFile(String filename) {
+        return pendingFiles.get(filename);
+    }
+
+    public PendingFile removePendingFile(String filename) {
+        PendingFile removed = pendingFiles.remove(filename);
+        if (removed != null) {
+            Logger.debug("Pending file removed: " + filename);
+        }
+        return removed;
     }
 
     public CommandRegistry getRegistry() { return registry; }

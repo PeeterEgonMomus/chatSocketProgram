@@ -5,7 +5,10 @@ public enum FrameType {
     FILE_META(2),
     FILE_CHUNK(3),
     FILE_END(4),
-    ERROR(5);
+    FILE_ACCEPT(5),   // ✅ new
+    ERROR(6),
+    FILE_REJECT(7); // New
+
 
     private final byte id;
 

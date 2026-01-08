@@ -1,5 +1,6 @@
 package org.example.chat;
 
+import org.example.chat.auth.UserSession;
 import org.example.chat.protocol.Frame;
 import org.example.chat.protocol.FrameDecoder;
 import org.example.chat.protocol.FrameEncoder;
@@ -11,6 +12,8 @@ import java.io.*;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 
+import java.security.MessageDigest;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -22,6 +25,9 @@ public class ClientHandler implements Runnable {
     private String currentFileName;
     private long bytesReceived;
 
+    private String currentFileRecipient;
+
+
     private final Socket socket;
     private final ChatServer server;
     private final EncryptionService encryptionService;
@@ -32,6 +38,10 @@ public class ClientHandler implements Runnable {
     private boolean aesReady = false;
     private String username;
     private String clientPublicKey;
+
+    private MessageDigest currentFileDigest;
+    private String currentFileExpectedChecksum;
+
 
     public ClientHandler(Socket socket, ChatServer server, EncryptionService encryptionService) {
         this.socket = socket;
@@ -110,15 +120,23 @@ public class ClientHandler implements Runnable {
                 case FILE_META -> {
                     String meta = new String(frame.getPayload(), StandardCharsets.UTF_8);
 
-                    // Very simple format: filename|size
+                    // recipient|filename|size|checksum
                     String[] parts = meta.split("\\|");
-                    if (parts.length != 2) {
+                    if (parts.length != 4) {
                         Logger.error("Invalid FILE_META format");
                         return;
                     }
 
-                    currentFileName = parts[0];
-                    long size = Long.parseLong(parts[1]);
+                    currentFileRecipient = parts[0];
+                    currentFileName = parts[1];
+                    long size;
+                    try {
+                        size = Long.parseLong(parts[2]);
+                    } catch (NumberFormatException e) {
+                        Logger.error("Invalid file size in FILE_META");
+                        return;
+                    }
+                    currentFileExpectedChecksum = parts[3];
 
                     if (size <= 0 || size > MAX_FILE_SIZE) {
                         Logger.error("Rejected file: invalid size " + size);
@@ -129,9 +147,12 @@ public class ClientHandler implements Runnable {
                     currentFileOut = new FileOutputStream(file);
                     bytesReceived = 0;
 
-                    Logger.info("Starting file transfer: " + currentFileName +
-                            " (" + size + " bytes)");
+                    // Prepare SHA-256 digest for incremental update
+                    currentFileDigest = MessageDigest.getInstance("SHA-256");
+
+                    Logger.info("Receiving file '" + currentFileName + "' (" + size + " bytes) from '" + this + "' for recipient '" + currentFileRecipient + "'");
                 }
+
 
                 case FILE_CHUNK -> {
                     if (currentFileOut == null) {
@@ -142,21 +163,81 @@ public class ClientHandler implements Runnable {
                     currentFileOut.write(frame.getPayload());
                     bytesReceived += frame.getPayload().length;
 
-                    Logger.debug("Received file chunk (" +
-                            frame.getPayload().length + " bytes)");
+                    // Incrementally update SHA-256 digest
+                    currentFileDigest.update(frame.getPayload());
+
+                    Logger.debug("Received file chunk (" + frame.getPayload().length + " bytes)");
                 }
+
 
                 case FILE_END -> {
-                    if (currentFileOut != null) {
-                        currentFileOut.close();
-                        Logger.info("File transfer completed: " + currentFileName +
-                                " (" + bytesReceived + " bytes)");
+                    if (currentFileOut == null) {
+                        Logger.error("Received FILE_END without active file transfer");
+                        return;
                     }
 
+                    currentFileOut.close();
+
+                    // Compute final checksum
+                    String receivedChecksum = Base64.getEncoder().encodeToString(currentFileDigest.digest());
+                    if (!receivedChecksum.equals(currentFileExpectedChecksum)) {
+                        Logger.error("Checksum mismatch for file " + currentFileName);
+                        send("File transfer failed: checksum mismatch for " + currentFileName);
+                        new File("received_" + currentFileName).delete();
+                        currentFileOut = null;
+                        currentFileName = null;
+                        currentFileRecipient = null;
+                        bytesReceived = 0;
+                        return;
+                    }
+
+                    Logger.info("File upload completed and checksum verified: " + currentFileName);
+
+                    // Continue normal PendingFile flow
+                    var optionalSession = server.getSessionManager().getSessionByUsername(currentFileRecipient);
+                    ClientHandler recipient = optionalSession.map(UserSession::getChatHandler).orElse(null);
+
+                    if (recipient == null) {
+                        send("User '" + currentFileRecipient + "' is not online. File stored but not delivered.");
+                        Logger.debug("Recipient not online: " + currentFileRecipient);
+                    } else {
+                        // ✅ Create PendingFile with checksum
+                        PendingFile pending = new PendingFile(
+                                this,
+                                recipient,
+                                new File("received_" + currentFileName),
+                                bytesReceived,
+                                currentFileExpectedChecksum
+                        );
+                        server.addPendingFile(currentFileName, pending);
+                        recipient.send("User '" + this + "' wants to send you file '" + currentFileName + "' (" + bytesReceived + " bytes). Type: /accept " + currentFileName);
+                        send("File uploaded. Waiting for '" + currentFileRecipient + "' to accept.");
+                    }
+
+                    // Reset state
                     currentFileOut = null;
                     currentFileName = null;
+                    currentFileRecipient = null;
                     bytesReceived = 0;
+                    currentFileDigest = null;
+                    currentFileExpectedChecksum = null;
                 }
+
+
+
+                case FILE_ACCEPT -> {
+                    String filename =
+                            new String(frame.getPayload(), StandardCharsets.UTF_8);
+                    handleFileAccept(filename);
+                }
+
+                case FILE_REJECT -> {
+                    String filename = new String(frame.getPayload(), StandardCharsets.UTF_8);
+                    handleFileReject(filename);
+                }
+
+
+
 
                 default -> Logger.debug("Unhandled frame type: " + frame.getType());
             }
@@ -220,4 +301,68 @@ public class ClientHandler implements Runnable {
         server.broadcast(this, message);
     }
 
+
+    private void handleFileAccept(String filename) {
+        PendingFile pending = server.getPendingFile(filename);
+
+        if (pending == null) {
+            send("No pending file named '" + filename + "'");
+            return;
+        }
+
+        if (pending.getRecipient() != this) {
+            send("You are not the recipient of this file.");
+            return;
+        }
+
+        try {
+            // ✅ Deliver the file to the recipient
+            pending.sendToRecipient();
+
+            // ✅ Remove from pending list after sending
+            server.removePendingFile(filename);
+
+            // Notify sender that the file was accepted
+            ClientHandler sender = pending.getSender();
+            sender.send("User '" + this + "' accepted your file '" + filename + "'.");
+
+            // Minimal confirmation for recipient
+            send("You received the file '" + filename + "'.");
+
+            // Clean up the temporary file
+            pending.cleanup();
+
+        } catch (Exception e) {
+            Logger.error("Failed to deliver file", e);
+            send("Failed to receive file.");
+        }
+    }
+
+
+    private void handleFileReject(String filename) {
+        PendingFile pending = server.getPendingFile(filename);
+
+        if (pending == null) {
+            send("No pending file named '" + filename + "'");
+            return;
+        }
+
+        if (pending.getRecipient() != this) {
+            send("You are not the recipient of this file.");
+            return;
+        }
+
+        // Notify sender about rejection
+        ClientHandler sender = pending.getSender();
+        sender.send("User '" + this + "' rejected your file '" + filename + "'.");
+
+        // Notify recipient that the file was rejected
+        send("You rejected the file '" + filename + "'.");
+
+        // Clean up the temporary file
+        pending.cleanup();
+
+        // Remove from pending list
+        server.removePendingFile(filename);
+    }
 }
