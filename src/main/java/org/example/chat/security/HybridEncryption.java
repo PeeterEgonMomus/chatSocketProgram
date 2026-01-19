@@ -15,10 +15,29 @@ public class HybridEncryption implements EncryptionStrategy {
         this.rsa = rsa;
     }
 
-    /** Called when a client sends an AES key encrypted with server RSA public key. */
+    /** Decrypt binary payload from client */
+    public byte[] decryptBytesFromClient(ClientHandler client, byte[] payload) {
+        if (!hasAES(client)) {
+            throw new IllegalStateException("Binary payload received before AES handshake");
+        }
+        byte[] decrypted = clientAES.get(client).decryptBytes(payload);
+        Logger.debug("Decrypted binary payload for " + client + " (plain bytes=" + decrypted.length + ")");
+        return decrypted;
+    }
+
+    /** Encrypt binary payload for client */
+    public byte[] encryptBytesForClient(ClientHandler client, byte[] payload) {
+        if (!hasAES(client)) {
+            throw new IllegalStateException("Binary encryption before AES handshake");
+        }
+        byte[] encrypted = clientAES.get(client).encryptBytes(payload);
+        Logger.debug("Encrypted binary payload for " + client + " (cipher bytes=" + encrypted.length + ")");
+        return encrypted;
+    }
+
+    /** Register AES key sent by client (RSA-encrypted) */
     public void registerClientAESKey(ClientHandler client, String encryptedAESKeyBase64) {
         try {
-            // RSA decrypt -> raw AES bytes, then Base64 encode for AESEncryption
             byte[] aesBytes = rsa.decryptToBytes(encryptedAESKeyBase64);
             String aesKeyBase64 = Base64.getEncoder().encodeToString(aesBytes);
             clientAES.put(client, new AESEncryption(aesKeyBase64));
@@ -29,8 +48,6 @@ public class HybridEncryption implements EncryptionStrategy {
         }
     }
 
-
-
     public boolean hasAES(ClientHandler client) {
         return clientAES.containsKey(client);
     }
@@ -39,26 +56,21 @@ public class HybridEncryption implements EncryptionStrategy {
         return rsa.getPublicKeyBase64();
     }
 
-    // Encrypt a message for a specific client (AES preferred)
+    /** Encrypt a message for a specific client (AES preferred) */
     public String encryptForClient(ClientHandler client, String message, String clientPublicKeyBase64) {
-        if (hasAES(client)) {
-            return clientAES.get(client).encrypt(message);
-        }
+        if (hasAES(client)) return clientAES.get(client).encrypt(message);
         return rsa.encryptWithPublicKey(message, clientPublicKeyBase64);
     }
 
-    // Decrypt a message from a specific client (AES preferred)
+    /** Decrypt a message from a specific client (AES preferred) */
     public String decryptFromClient(ClientHandler client, String payload) {
-        if (hasAES(client)) {
-            return clientAES.get(client).decrypt(payload);
-        }
+        if (hasAES(client)) return clientAES.get(client).decrypt(payload);
         return rsa.decrypt(payload);
     }
 
     public String encryptWithClientPublicKey(String message, String clientPublicKeyBase64) {
         return rsa.encryptWithPublicKey(message, clientPublicKeyBase64);
     }
-
 
     @Override
     public String encrypt(String plainText) {
@@ -72,5 +84,6 @@ public class HybridEncryption implements EncryptionStrategy {
 
     public void removeClient(ClientHandler client) {
         clientAES.remove(client);
+        Logger.debug("Removed AES session for client " + client);
     }
 }

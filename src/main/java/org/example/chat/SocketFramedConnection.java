@@ -1,10 +1,10 @@
 package org.example.chat;
 
+import org.example.chat.Client.connection.FramedConnection;
 import org.example.chat.protocol.Frame;
 import org.example.chat.protocol.FrameType;
 import java.io.*;
 import java.net.Socket;
-import java.nio.ByteBuffer;
 
 public class SocketFramedConnection implements FramedConnection {
     private final Socket socket;
@@ -40,7 +40,7 @@ public class SocketFramedConnection implements FramedConnection {
         }
     }
 
-    @Override
+
     public void close() throws IOException {
         socket.close();
     }

@@ -39,22 +39,8 @@ public class AESEncryption implements EncryptionStrategy {
     @Override
     public String encrypt(String plainText) {
         try {
-            Logger.debug("Encrypting with AES...");
-            byte[] keyBytes = Base64.getDecoder().decode(base64Key);
-            SecretKeySpec key = new SecretKeySpec(keyBytes, "AES");
-
-            byte[] iv = new byte[IV_LENGTH];
-            RANDOM.nextBytes(iv);
-
-            Cipher cipher = Cipher.getInstance(TRANSFORM);
-            cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, iv));
-            byte[] ct = cipher.doFinal(plainText.getBytes());
-
-            byte[] out = new byte[iv.length + ct.length];
-            System.arraycopy(iv, 0, out, 0, iv.length);
-            System.arraycopy(ct, 0, out, iv.length, ct.length);
-
-            String result = Base64.getEncoder().encodeToString(out);
+            byte[] encrypted = encryptBytes(plainText.getBytes());
+            String result = Base64.getEncoder().encodeToString(encrypted);
             Logger.debug("AES encryption done (input=" + plainText.length() + "B, output=" + result.length() + ")");
             return result;
         } catch (Exception e) {
@@ -66,24 +52,61 @@ public class AESEncryption implements EncryptionStrategy {
     @Override
     public String decrypt(String cipherText) {
         try {
-            Logger.debug("Decrypting AES message...");
-            byte[] keyBytes = Base64.getDecoder().decode(base64Key);
-            SecretKeySpec key = new SecretKeySpec(keyBytes, "AES");
-
-            byte[] all = Base64.getDecoder().decode(cipherText);
-            byte[] iv = new byte[IV_LENGTH];
-            System.arraycopy(all, 0, iv, 0, iv.length);
-            byte[] ct = new byte[all.length - iv.length];
-            System.arraycopy(all, iv.length, ct, 0, ct.length);
-
-            Cipher cipher = Cipher.getInstance(TRANSFORM);
-            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, iv));
-            byte[] plain = cipher.doFinal(ct);
-            String text = new String(plain);
+            byte[] cipherBytes = Base64.getDecoder().decode(cipherText);
+            byte[] decrypted = decryptBytes(cipherBytes);
+            String text = new String(decrypted);
             Logger.debug("AES decryption done (plain length=" + text.length() + ")");
             return text;
         } catch (Exception e) {
             Logger.error("AES decryption failed", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    /** Encrypt raw bytes for file-safe transmission */
+    public byte[] encryptBytes(byte[] plainBytes) {
+        try {
+            byte[] keyBytes = Base64.getDecoder().decode(base64Key);
+            SecretKeySpec key = new SecretKeySpec(keyBytes, "AES");
+
+            byte[] iv = new byte[IV_LENGTH];
+            RANDOM.nextBytes(iv);
+
+            Cipher cipher = Cipher.getInstance(TRANSFORM);
+            cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, iv));
+            byte[] ct = cipher.doFinal(plainBytes);
+
+            byte[] out = new byte[iv.length + ct.length];
+            System.arraycopy(iv, 0, out, 0, iv.length);
+            System.arraycopy(ct, 0, out, iv.length, ct.length);
+
+            Logger.debug("AES encryptBytes | plaintext=" + plainBytes.length + ", ciphertext=" + out.length);
+            return out;
+        } catch (Exception e) {
+            Logger.error("AES byte encryption failed", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    public byte[] decryptBytes(byte[] cipherBytes) {
+        try {
+            byte[] keyBytes = Base64.getDecoder().decode(base64Key);
+            SecretKeySpec key = new SecretKeySpec(keyBytes, "AES");
+
+            byte[] iv = new byte[IV_LENGTH];
+            System.arraycopy(cipherBytes, 0, iv, 0, IV_LENGTH);
+
+            byte[] ct = new byte[cipherBytes.length - IV_LENGTH];
+            System.arraycopy(cipherBytes, IV_LENGTH, ct, 0, ct.length);
+
+            Cipher cipher = Cipher.getInstance(TRANSFORM);
+            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, iv));
+            byte[] decrypted = cipher.doFinal(ct);
+
+            Logger.debug("AES decryptBytes | ciphertext=" + cipherBytes.length + ", plaintext=" + decrypted.length);
+            return decrypted;
+        } catch (Exception e) {
+            Logger.error("AES byte decryption failed", e);
             throw new RuntimeException(e);
         }
     }

@@ -28,4 +28,16 @@ public class EncryptionService {
     public void removeClient(ClientHandler client) {
         hybrid.removeClient(client);
     }
+
+    public byte[] decryptBytesFromClient(ClientHandler client, byte[] payload) {
+        return hybrid.decryptBytesFromClient(client, payload);
+    }
+
+    public byte[] encryptBytesForClient(ClientHandler client, byte[] payload) {
+        return hybrid.encryptBytesForClient(client, payload);
+    }
+
+
+
+
 }

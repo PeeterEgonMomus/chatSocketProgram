@@ -1,6 +1,6 @@
 package org.example.security;
 
-import org.example.chat.Client.ClientEncryption;
+import org.example.chat.Client.crypto.ClientEncryption;
 import org.example.chat.ClientHandler;
 import org.example.chat.security.AESEncryption;
 import org.example.chat.security.HybridEncryption;

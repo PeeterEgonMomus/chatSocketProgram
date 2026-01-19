@@ -1,14 +1,18 @@
 package org.example.chat.protocol;
 
 public enum FrameType {
+    HANDSHAKE_SERVER_KEY(10),
+    HANDSHAKE_CLIENT_KEY(11),
+    HANDSHAKE_AES_KEY(12),
+    HANDSHAKE_OK(13),
+
     CHAT(1),
     FILE_META(2),
     FILE_CHUNK(3),
     FILE_END(4),
-    FILE_ACCEPT(5),   // ✅ new
+    FILE_ACCEPT(5),
     ERROR(6),
-    FILE_REJECT(7); // New
-
+    FILE_REJECT(7);
 
     private final byte id;
 
@@ -27,3 +31,4 @@ public enum FrameType {
         throw new IllegalArgumentException("Unknown frame type id: " + id);
     }
 }
+

@@ -1,4 +1,4 @@
-package org.example.chat.Client;
+package org.example.chat.Client.crypto;
 
 public interface ClientCrypto {
     // Set/receive server public key
@@ -23,4 +23,10 @@ public interface ClientCrypto {
 
     // decrypt message from server (assumes AES ready)
     String decryptFromServer(String payload) throws Exception;
+
+    // 🔐 Encrypt raw bytes for server (AES only)
+    byte[] encryptBytesForServer(byte[] data) throws Exception;
+
+    // 🔓 Decrypt raw bytes from server
+    byte[] decryptBytesFromServer(byte[] data) throws Exception;
 }
