@@ -1,24 +1,20 @@
 package org.example.chat.security;
 
 import org.example.chat.ClientHandler;
+import org.example.chat.protocol.FrameType;
 
 public class EncryptionService {
+
     private final HybridEncryption hybrid;
 
     public EncryptionService(HybridEncryption hybrid) {
         this.hybrid = hybrid;
     }
 
+    /* HANDSHAKE */
+
     public void registerClientAESKey(ClientHandler client, String encryptedAESKeyBase64) {
         hybrid.registerClientAESKey(client, encryptedAESKeyBase64);
-    }
-
-    public String encryptForClient(ClientHandler client, String message, String clientPublicKeyBase64) {
-        return hybrid.encryptForClient(client, message, clientPublicKeyBase64);
-    }
-
-    public String decryptFromClient(ClientHandler client, String payload) {
-        return hybrid.decryptFromClient(client, payload);
     }
 
     public String getServerPublicKeyBase64() {
@@ -29,15 +25,13 @@ public class EncryptionService {
         hybrid.removeClient(client);
     }
 
-    public byte[] decryptBytesFromClient(ClientHandler client, byte[] payload) {
-        return hybrid.decryptBytesFromClient(client, payload);
+    /* SESSION */
+
+    public byte[] encryptBytesForClient(ClientHandler client, FrameType type, byte[] payload) {
+        return hybrid.encryptBytesForClient(client, type, payload);
     }
 
-    public byte[] encryptBytesForClient(ClientHandler client, byte[] payload) {
-        return hybrid.encryptBytesForClient(client, payload);
+    public byte[] decryptBytesFromClient(ClientHandler client, FrameType type, byte[] payload) {
+        return hybrid.decryptBytesFromClient(client, type, payload);
     }
-
-
-
-
 }

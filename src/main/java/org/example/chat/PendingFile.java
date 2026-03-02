@@ -1,98 +1,101 @@
 package org.example.chat;
 
-import org.example.chat.protocol.Frame;
-import org.example.chat.protocol.FrameEncoder;
-import org.example.chat.protocol.FrameType;
+import org.example.chat.files.*;
+import org.example.chat.files.FileDescriptor;
+import org.example.chat.protocol.*;
 import org.example.chat.util.Logger;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.security.MessageDigest;
-import java.util.Base64;
+import java.io.*;
 
-public class PendingFile {
+public final class PendingFile {
 
     private static final int CHUNK_SIZE = 4096;
 
-    private final ClientHandler sender;
-    private final ClientHandler recipient;
+    private final String id;
+    private final FileTransferPeer sender;
+    private final FileTransferPeer recipient;
+    private final FileDescriptor descriptor;
     private final File file;
-    private final long size;
-    private final String checksumBase64;
 
-    public PendingFile(ClientHandler sender,
-                       ClientHandler recipient,
-                       File file,
-                       long size,
-                       String checksumBase64) {
+    public PendingFile(
+            String id,
+            FileTransferPeer sender,
+            FileTransferPeer recipient,
+            FileDescriptor descriptor,
+            File file
+    )
+    {
+        this.id = id;
         this.sender = sender;
         this.recipient = recipient;
+        this.descriptor = descriptor;
         this.file = file;
-        this.size = size;
-        this.checksumBase64 = checksumBase64;
     }
 
-    public ClientHandler getSender() {
-        return sender;
+    public void startDelivery() throws Exception {
+
+        Logger.info("Sending FILE_START to " + recipient.getUsername());
+
+        sendFileStart();
+        streamFileChunks();
+        sendFileEnd();
     }
 
-    public ClientHandler getRecipient() {
-        return recipient;
-    }
 
-    public String getFilename() {
-        return file.getName().replaceFirst("^received_", "");
-    }
+    /* ================= PRIVATE ================= */
 
-    public void sendToRecipient() throws IOException {
-        Logger.info("Sending file '" + file.getName() + "' to '" + recipient + "'");
+    private void sendFileStart() throws Exception {
 
-        var out = recipient.getSocket().getOutputStream();
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream data = new DataOutputStream(baos);
 
-        // ================= FILE_META: filename|size|checksum =================
-        String meta = getFilename() + "|" + size + "|" + checksumBase64;
-        FrameEncoder.write(
-                new Frame(FrameType.FILE_META, meta.getBytes()),
-                out
+        data.writeUTF(id);   // ONLY ID
+
+        recipient.sendEncrypted(
+                FrameType.FILE_START,
+                baos.toByteArray()
         );
+    }
 
-        // ================= FILE_CHUNK(s) =================
+
+
+    private void streamFileChunks() throws Exception {
+
         try (FileInputStream in = new FileInputStream(file)) {
-            byte[] buffer = new byte[CHUNK_SIZE];
-            int read;
-            while ((read = in.read(buffer)) != -1) {
-                byte[] chunk = new byte[read];
-                System.arraycopy(buffer, 0, chunk, 0, read);
 
-                FrameEncoder.write(
-                        new Frame(FrameType.FILE_CHUNK, chunk),
-                        out
+            byte[] buffer = new byte[CHUNK_SIZE];
+            int index = 0;
+            int read;
+
+            while ((read = in.read(buffer)) != -1) {
+
+                byte[] payload =
+                        ChunkCodec.encode(id, index++, buffer, read);
+
+                recipient.sendEncrypted(
+                        FrameType.FILE_CHUNK,
+                        payload
                 );
             }
         }
-
-        // ================= FILE_END =================
-        FrameEncoder.write(
-                new Frame(FrameType.FILE_END, getFilename().getBytes()),
-                out
-        );
-
-        Logger.info("File delivery completed: " + file.getName());
     }
+
+
+    private void sendFileEnd() throws Exception {
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream data = new DataOutputStream(baos);
+
+        data.writeUTF(id);   // MATCHES readUTF()
+
+        recipient.sendEncrypted(
+                FrameType.FILE_END,
+                baos.toByteArray()
+        );
+    }
+
 
     public void cleanup() {
-        if (file.exists()) {
-            if (file.delete()) {
-                Logger.debug("Pending file deleted: " + file.getName());
-            } else {
-                Logger.error("Failed to delete pending file: " + file.getName());
-            }
-        }
-    }
-
-    public String getChecksumBase64() {
-        return checksumBase64;
+        if (file.exists()) file.delete();
     }
 }

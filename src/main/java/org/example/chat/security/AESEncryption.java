@@ -39,7 +39,7 @@ public class AESEncryption implements EncryptionStrategy {
     @Override
     public String encrypt(String plainText) {
         try {
-            byte[] encrypted = encryptBytes(plainText.getBytes());
+            byte[] encrypted = encryptBytes(plainText.getBytes(), null);
             String result = Base64.getEncoder().encodeToString(encrypted);
             Logger.debug("AES encryption done (input=" + plainText.length() + "B, output=" + result.length() + ")");
             return result;
@@ -53,7 +53,7 @@ public class AESEncryption implements EncryptionStrategy {
     public String decrypt(String cipherText) {
         try {
             byte[] cipherBytes = Base64.getDecoder().decode(cipherText);
-            byte[] decrypted = decryptBytes(cipherBytes);
+            byte[] decrypted = decryptBytes(cipherBytes, null);
             String text = new String(decrypted);
             Logger.debug("AES decryption done (plain length=" + text.length() + ")");
             return text;
@@ -64,7 +64,7 @@ public class AESEncryption implements EncryptionStrategy {
     }
 
     /** Encrypt raw bytes for file-safe transmission */
-    public byte[] encryptBytes(byte[] plainBytes) {
+    public byte[] encryptBytes(byte[] plainBytes, byte[] aad) {
         try {
             byte[] keyBytes = Base64.getDecoder().decode(base64Key);
             SecretKeySpec key = new SecretKeySpec(keyBytes, "AES");
@@ -74,6 +74,9 @@ public class AESEncryption implements EncryptionStrategy {
 
             Cipher cipher = Cipher.getInstance(TRANSFORM);
             cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, iv));
+
+            if (aad != null) cipher.updateAAD(aad);
+
             byte[] ct = cipher.doFinal(plainBytes);
 
             byte[] out = new byte[iv.length + ct.length];
@@ -88,7 +91,7 @@ public class AESEncryption implements EncryptionStrategy {
         }
     }
 
-    public byte[] decryptBytes(byte[] cipherBytes) {
+    public byte[] decryptBytes(byte[] cipherBytes, byte[] aad) {
         try {
             byte[] keyBytes = Base64.getDecoder().decode(base64Key);
             SecretKeySpec key = new SecretKeySpec(keyBytes, "AES");
@@ -101,6 +104,9 @@ public class AESEncryption implements EncryptionStrategy {
 
             Cipher cipher = Cipher.getInstance(TRANSFORM);
             cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, iv));
+
+            if (aad != null) cipher.updateAAD(aad);
+
             byte[] decrypted = cipher.doFinal(ct);
 
             Logger.debug("AES decryptBytes | ciphertext=" + cipherBytes.length + ", plaintext=" + decrypted.length);

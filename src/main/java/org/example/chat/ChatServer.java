@@ -3,6 +3,7 @@ package org.example.chat;
 import org.example.chat.auth.*;
 import org.example.chat.auth.policy.*;
 import org.example.chat.commands.*;
+import org.example.chat.files.FileTransferManager;
 import org.example.chat.security.EncryptionService;
 import org.example.chat.security.HybridEncryption;
 import org.example.chat.security.RSAEncryption;
@@ -12,17 +13,23 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ChatServer {
     private final List<ClientHandler> clients = new ArrayList<>();
-    private final Map<String, PendingFile> pendingFiles = new HashMap<>();
     private final CommandRegistry registry = new CommandRegistry();
     private final UserStore userStore = new InMemoryUserStore();
     private final UserSessionManager sessionManager = new UserSessionManager();
     private final EncryptionService encryptionService;
+    private final FileTransferManager fileTransferManager;
+
+    private final ExecutorService transferExecutor =
+            Executors.newFixedThreadPool(8);
 
     public ChatServer(EncryptionService encryptionService) {
         this.encryptionService = encryptionService;
+        this.fileTransferManager = new FileTransferManager(transferExecutor);
 
         PasswordPolicy passwordPolicy = new CompositePasswordPolicy()
                 .addPolicy(new MinLengthPolicy(8))
@@ -32,6 +39,14 @@ public class ChatServer {
         registry.register(new LoginCommand(userStore, sessionManager)); // inject sessionManager
         registry.register(new HelpCommand(registry));
         registry.register(new BroadcastCommand());
+    }
+
+    public FileTransferManager getFileTransferManager() {
+        return fileTransferManager;
+    }
+
+    public void shutdown() {
+        transferExecutor.shutdown();
     }
 
     public void start(int port) throws IOException {
@@ -63,21 +78,8 @@ public class ChatServer {
                 .ifPresent(session -> sessionManager.removeSession(session.getUsername()));
     }
 
-    public void addPendingFile(String filename, PendingFile pendingFile) {
-        pendingFiles.put(filename, pendingFile);
-        Logger.debug("Pending file registered: " + filename);
-    }
-
-    public PendingFile getPendingFile(String filename) {
-        return pendingFiles.get(filename);
-    }
-
-    public PendingFile removePendingFile(String filename) {
-        PendingFile removed = pendingFiles.remove(filename);
-        if (removed != null) {
-            Logger.debug("Pending file removed: " + filename);
-        }
-        return removed;
+    public ExecutorService getTransferExecutor() {
+        return transferExecutor;
     }
 
     public CommandRegistry getRegistry() { return registry; }

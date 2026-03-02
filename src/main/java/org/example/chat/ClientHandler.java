@@ -1,11 +1,8 @@
 package org.example.chat;
 
-import org.example.chat.auth.UserSession;
-import org.example.chat.files.FileTransferSession;
-import org.example.chat.protocol.Frame;
-import org.example.chat.protocol.FrameDecoder;
-import org.example.chat.protocol.FrameEncoder;
-import org.example.chat.protocol.FrameType;
+import org.example.chat.files.*;
+import org.example.chat.files.FileDescriptor;
+import org.example.chat.protocol.*;
 import org.example.chat.security.EncryptionService;
 import org.example.chat.util.Logger;
 
@@ -13,7 +10,7 @@ import java.io.*;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 
-public class ClientHandler implements Runnable {
+public class ClientHandler implements Runnable, FileTransferPeer {
 
     private final Socket socket;
     private final ChatServer server;
@@ -24,16 +21,20 @@ public class ClientHandler implements Runnable {
 
     private boolean aesReady = false;
     private String username;
-    private String clientPublicKey;
 
-    // ✅ Single source of truth for file receiving
-    private FileTransferSession fileSession;
+    private final Object sendLock = new Object();
 
-    public ClientHandler(Socket socket, ChatServer server, EncryptionService encryptionService) {
+    public ClientHandler(Socket socket,
+                         ChatServer server,
+                         EncryptionService encryptionService) {
         this.socket = socket;
         this.server = server;
         this.encryptionService = encryptionService;
     }
+
+    /* =========================================================
+     * Lifecycle
+     * ========================================================= */
 
     @Override
     public void run() {
@@ -50,222 +51,397 @@ public class ClientHandler implements Runnable {
                 handleFrame(frame);
             }
 
-        } catch (IOException e) {
-            Logger.error("Client disconnected", e);
         } catch (Exception e) {
             Logger.error("Client error", e);
         } finally {
             encryptionService.removeClient(this);
             server.removeClient(this);
+            server.getFileTransferManager()
+                    .abortTransfersForPeer(this);
         }
     }
 
-    /* ================= HANDSHAKE ================= */
+    /* =========================================================
+     * Handshake
+     * ========================================================= */
 
     private void sendServerPublicKey() throws IOException {
-        String serverPub = encryptionService.getServerPublicKeyBase64();
         FrameEncoder.write(
-                new Frame(FrameType.HANDSHAKE_SERVER_KEY, serverPub.getBytes(StandardCharsets.UTF_8)),
+                new Frame(
+                        FrameType.HANDSHAKE_SERVER_KEY,
+                        encryptionService.getServerPublicKeyBase64()
+                                .getBytes(StandardCharsets.UTF_8)
+                ),
                 rawOut
         );
     }
 
     private void performHandshake() throws Exception {
+
         while (!aesReady) {
+
             Frame frame = FrameDecoder.read(rawIn);
-            if (frame == null) throw new IOException("Client disconnected during handshake");
+            if (frame == null)
+                throw new IOException("Handshake aborted");
 
             switch (frame.getType()) {
-                case HANDSHAKE_CLIENT_KEY -> {
-                    clientPublicKey = new String(frame.getPayload(), StandardCharsets.UTF_8);
-                }
+
+                case FILE_START -> handleFileStart(frame);
+
+                case HANDSHAKE_CLIENT_KEY ->
+                        Logger.debug("Client public key received (ignored)");
+
                 case HANDSHAKE_AES_KEY -> {
-                    String encryptedAES = new String(frame.getPayload(), StandardCharsets.UTF_8);
-                    encryptionService.registerClientAESKey(this, encryptedAES);
-                    FrameEncoder.write(new Frame(FrameType.HANDSHAKE_OK, new byte[0]), rawOut);
+
+                    encryptionService.registerClientAESKey(
+                            this,
+                            new String(frame.getPayload(), StandardCharsets.UTF_8)
+                    );
+
+                    FrameEncoder.write(
+                            new Frame(FrameType.HANDSHAKE_OK, new byte[0]),
+                            rawOut
+                    );
+
                     aesReady = true;
+                    Logger.info("Handshake completed for client " + this);
                 }
-                default -> throw new IllegalStateException("Unexpected handshake frame: " + frame.getType());
+
+                default -> throw new IllegalStateException("Invalid handshake frame");
             }
         }
     }
 
-    /* ================= FRAME ROUTING ================= */
+    /* =========================================================
+     * Frame Routing
+     * ========================================================= */
 
     private void handleFrame(Frame frame) {
         try {
+
             switch (frame.getType()) {
 
                 case CHAT -> handleChat(frame);
 
-                case FILE_META -> handleFileMeta(frame);
+                case SEND_FILE_REQUEST -> handleSendFileRequest(frame);
+
+                case FILE_OFFER -> handleFileOffer(frame);
+
+                case FILE_START -> handleFileStart(frame);
 
                 case FILE_CHUNK -> handleFileChunk(frame);
 
-                case FILE_END -> handleFileEnd();
+                case FILE_END -> handleFileEnd(frame);
 
-                case FILE_ACCEPT -> handleFileAccept(
-                        new String(frame.getPayload(), StandardCharsets.UTF_8)
-                );
+                case FILE_ACCEPT -> handleFileAccept(readUTF(frame));
 
-                case FILE_REJECT -> handleFileReject(
-                        new String(frame.getPayload(), StandardCharsets.UTF_8)
-                );
-
-                default -> Logger.debug("Unhandled frame type: " + frame.getType());
+                case FILE_REJECT -> handleFileReject(readUTF(frame));
             }
+
         } catch (Exception e) {
-            Logger.error("Failed to handle frame " + frame.getType(), e);
-            abortFileTransfer();
+            Logger.error("Frame handling failed", e);
         }
     }
+
+    /* =========================================================
+     * Decryption Helpers (NEW)
+     * ========================================================= */
+
+    private byte[] decrypt(Frame frame) throws Exception {
+        return encryptionService.decryptBytesFromClient(
+                this,
+                frame.getType(),
+                frame.getPayload()
+        );
+    }
+
+    private String readUTF(Frame frame) throws Exception {
+        try (DataInputStream in =
+                     new DataInputStream(new ByteArrayInputStream(decrypt(frame)))) {
+            return in.readUTF();
+        }
+    }
+
+    private DataInputStream readStream(Frame frame) throws Exception {
+        return new DataInputStream(
+                new ByteArrayInputStream(decrypt(frame))
+        );
+    }
+
+    /* =========================================================
+     * Chat
+     * ========================================================= */
 
     private void handleChat(Frame frame) throws Exception {
-        String encrypted = new String(frame.getPayload(), StandardCharsets.UTF_8);
-        String message = encryptionService.decryptFromClient(this, encrypted);
-        server.getRegistry().executeCommand(this, message);
+
+        byte[] decrypted = decrypt(frame);
+
+        server.getRegistry().executeCommand(
+                this,
+                new String(decrypted, StandardCharsets.UTF_8)
+        );
     }
 
-    /* ================= FILE TRANSFER ================= */
+    /* =========================================================
+     * File Negotiation
+     * ========================================================= */
 
-    private void handleFileMeta(Frame frame) throws Exception {
-        String meta = new String(frame.getPayload(), StandardCharsets.UTF_8);
-        String[] parts = meta.split("\\|");
+    private void handleFileOffer(Frame frame) throws Exception {
 
-        if (parts.length != 4) {
-            throw new IllegalArgumentException("Invalid FILE_META format");
-        }
+        DataInputStream in = readStream(frame);
 
-        String recipient = parts[0];
-        String filename = parts[1];
-        long size = Long.parseLong(parts[2]);
-        String checksum = parts[3];
+        String transferId = in.readUTF();
+        String filename = in.readUTF();
+        long size = in.readLong();
+        String checksum = in.readUTF();
 
-        fileSession = new FileTransferSession();
-        fileSession.start(recipient, filename, size, checksum);
+        ActiveFileTransfer transfer =
+                server.getFileTransferManager().getById(transferId);
 
-        Logger.info("Started FILE_META for '" + filename + "' (" + size + " bytes)");
+        if (transfer == null)
+            throw new IllegalStateException("Unknown transfer " + transferId);
+
+        if (transfer.getSender() != this)
+            throw new IllegalStateException("Sender mismatch " + transferId);
+
+        if (transfer.getState() != ActiveFileTransfer.State.WAITING_FOR_RECIPIENT)
+            throw new IllegalStateException(
+                    "Transfer " + transferId + " not waiting for recipient"
+            );
+
+        transfer.registerDescriptor(
+                new FileDescriptor(
+                        transferId,
+                        filename,
+                        size,
+                        checksum
+                )
+        );
+
+        ClientHandler recipient =
+                (ClientHandler) transfer.getRecipient();
+
+        forwardOffer(recipient,
+                transferId,
+                filename,
+                size,
+                checksum);
     }
+
+    private void handleFileStart(Frame frame) throws Exception {
+
+        DataInputStream in = readStream(frame);
+
+        String transferId = in.readUTF();
+
+        ActiveFileTransfer transfer =
+                server.getFileTransferManager().getById(transferId);
+
+        if (transfer == null)
+            throw new IllegalStateException("Unknown transfer " + transferId);
+
+        if (transfer.getState() != ActiveFileTransfer.State.UPLOADING)
+            throw new IllegalStateException("Transfer not ready for FILE_START");
+
+        transfer.startUploadSession();
+    }
+
+    private void forwardOffer(
+            ClientHandler recipient,
+            String transferId,
+            String filename,
+            long size,
+            String checksum
+    ) throws Exception {
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(baos);
+
+        out.writeUTF(transferId);
+        out.writeUTF(this.username);
+        out.writeUTF(filename);
+        out.writeLong(size);
+        out.writeUTF(checksum);
+
+        byte[] encrypted =
+                encryptionService.encryptBytesForClient(
+                        recipient,
+                        FrameType.FILE_OFFER,
+                        baos.toByteArray()
+                );
+
+        recipient.sendFrame(new Frame(FrameType.FILE_OFFER, encrypted));
+    }
+
+    /* =========================================================
+     * Upload Pipeline
+     * ========================================================= */
 
     private void handleFileChunk(Frame frame) throws Exception {
-        if (fileSession == null) {
-            throw new IllegalStateException("FILE_CHUNK without FILE_META");
-        }
 
-        byte[] decrypted = encryptionService.decryptBytesFromClient(this, frame.getPayload());
+        DataInputStream in = readStream(frame);
 
-        DataInputStream in = new DataInputStream(new ByteArrayInputStream(decrypted));
+        String transferId = in.readUTF();
         int index = in.readInt();
-        int length = in.readInt();
+        int len = in.readInt();
 
-        byte[] data = in.readNBytes(length);
+        byte[] data = in.readNBytes(len);
 
-        Logger.debug("SERVER CHUNK #" + index + " | bytes=" + data.length);
+        ActiveFileTransfer transfer =
+                server.getFileTransferManager().getById(transferId);
 
-        fileSession.acceptChunk(index, data);
-    }
+        if (transfer == null)
+            throw new IllegalStateException("Unknown transfer " + transferId);
 
-    private void handleFileEnd() throws Exception {
-        if (fileSession == null) {
-            throw new IllegalStateException("FILE_END without active transfer");
-        }
-
-        fileSession.finish();
-        forwardFileToRecipient(fileSession);
-        fileSession = null;
-    }
-
-    private void abortFileTransfer() {
-        if (fileSession != null) {
-            fileSession.abort();
-            fileSession = null;
-        }
-    }
-
-    /* ================= FILE DELIVERY ================= */
-
-    private void forwardFileToRecipient(FileTransferSession session) throws IOException {
-        var targetSession = server.getSessionManager()
-                .getSessionByUsername(session.getRecipient())
-                .map(UserSession::getChatHandler)
-                .orElse(null);
-
-        if (targetSession == null) {
-            send("User '" + session.getRecipient() + "' is offline. File stored.");
-            return;
-        }
-
-        PendingFile pending = new PendingFile(
-                this,
-                targetSession,
-                session.getFile(),
-                session.getSize(),
-                null
-        );
-
-        server.addPendingFile(session.getFilename(), pending);
-
-        targetSession.send(
-                "User '" + this + "' wants to send you file '" +
-                        session.getFilename() + "'. Type /accept " + session.getFilename()
-        );
-
-        send("File uploaded. Waiting for recipient.");
-    }
-
-    /* ================= FILE ACCEPT / REJECT ================= */
-
-    private void handleFileAccept(String filename) {
-        PendingFile pending = server.getPendingFile(filename);
-
-        if (pending == null || pending.getRecipient() != this) {
-            send("No pending file named '" + filename + "'");
-            return;
-        }
-
-        try {
-            pending.sendToRecipient();
-            server.removePendingFile(filename);
-            pending.getSender().send("Your file '" + filename + "' was accepted.");
-            send("You received the file '" + filename + "'.");
-            pending.cleanup();
-        } catch (Exception e) {
-            Logger.error("File delivery failed", e);
-        }
-    }
-
-    private void handleFileReject(String filename) {
-        PendingFile pending = server.getPendingFile(filename);
-
-        if (pending == null || pending.getRecipient() != this) {
-            send("No pending file named '" + filename + "'");
-            return;
-        }
-
-        pending.getSender().send("Your file '" + filename + "' was rejected.");
-        pending.cleanup();
-        server.removePendingFile(filename);
-    }
-
-    /* ================= OUTBOUND ================= */
-
-    public void sendChat(String message) {
-        try {
-            String encrypted = encryptionService.encryptForClient(this, message, clientPublicKey);
-            FrameEncoder.write(
-                    new Frame(FrameType.CHAT, encrypted.getBytes(StandardCharsets.UTF_8)),
-                    rawOut
+        if (transfer.getState() != ActiveFileTransfer.State.UPLOADING)
+            throw new IllegalStateException(
+                    "Transfer " + transferId + " not ready for upload"
             );
-        } catch (Exception e) {
-            Logger.error("Failed to send message", e);
-        }
+
+        transfer.acceptChunk(index, data);
     }
+
+    private void handleFileEnd(Frame frame) throws Exception {
+
+        String transferId = readUTF(frame);
+
+        ActiveFileTransfer transfer =
+                server.getFileTransferManager().getById(transferId);
+
+        if (transfer == null)
+            throw new IllegalStateException("Unknown transfer " + transferId);
+
+        if (transfer.getState() != ActiveFileTransfer.State.UPLOADING)
+            throw new IllegalStateException("Transfer " + transferId + " not uploading");
+
+        transfer.finishUpload();
+        transfer.accept();
+    }
+
+    /* =========================================================
+     * Accept / Reject
+     * ========================================================= */
+
+    private void handleFileAccept(String transferId) throws Exception {
+
+        ActiveFileTransfer transfer =
+                server.getFileTransferManager().getById(transferId);
+
+        if (transfer == null || transfer.getRecipient() != this) {
+
+            sendEncrypted(
+                    FrameType.ERROR,
+                    ("Invalid file id: " + transferId)
+                            .getBytes(StandardCharsets.UTF_8)
+            );
+            return;
+        }
+
+        transfer.setState(ActiveFileTransfer.State.UPLOADING);
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(baos);
+        out.writeUTF(transferId);
+
+        transfer.getSender().sendEncrypted(
+                FrameType.SEND_FILE_READY,
+                baos.toByteArray()
+        );
+    }
+
+    private void handleFileReject(String transferId) throws Exception {
+
+        ActiveFileTransfer transfer =
+                server.getFileTransferManager().getById(transferId);
+
+        if (transfer == null || transfer.getRecipient() != this)
+            return;
+
+        transfer.setState(ActiveFileTransfer.State.REJECTED);
+
+        transfer.getSender().sendEncrypted(
+                FrameType.ERROR,
+                ("Recipient rejected the file: " + transferId)
+                        .getBytes(StandardCharsets.UTF_8)
+        );
+
+        server.getFileTransferManager().remove(transferId);
+    }
+
+    /* =========================================================
+     * SEND_FILE_REQUEST
+     * ========================================================= */
+
+    private void handleSendFileRequest(Frame frame) throws Exception {
+
+        DataInputStream in = readStream(frame);
+
+        String transferId = in.readUTF();
+        String recipientName = in.readUTF();
+
+        if (!isAuthenticated()) {
+            send("You must be authenticated to send files.");
+            return;
+        }
+
+        var sessionOpt =
+                server.getSessionManager()
+                        .getSessionByUsername(recipientName);
+
+        if (sessionOpt.isEmpty()) {
+            send("User not online.");
+            return;
+        }
+
+        ClientHandler recipient =
+                sessionOpt.get().getChatHandler();
+
+        if (recipient == this) {
+            send("You cannot send a file to yourself.");
+            return;
+        }
+
+        ActiveFileTransfer transfer =
+                server.getFileTransferManager()
+                        .createTransfer(
+                                transferId,
+                                this,
+                                recipient
+                        );
+
+        transfer.setState(
+                ActiveFileTransfer.State.WAITING_FOR_RECIPIENT
+        );
+    }
+
+    /* =========================================================
+     * Utilities
+     * ========================================================= */
 
     public void send(String message) {
-        sendChat(message);
+        try {
+            byte[] encrypted =
+                    encryptionService.encryptBytesForClient(
+                            this,
+                            FrameType.CHAT,
+                            message.getBytes(StandardCharsets.UTF_8)
+                    );
+            sendFrame(new Frame(FrameType.CHAT, encrypted));
+        } catch (Exception e) {
+            Logger.error("Send failed", e);
+        }
     }
 
-    /* ================= ACCESSORS ================= */
+    @Override
+    public void sendEncrypted(FrameType type, byte[] payload) throws Exception {
+        byte[] encrypted =
+                encryptionService.encryptBytesForClient(
+                        this,
+                        type,
+                        payload
+                );
+        sendFrame(new Frame(type, encrypted));
+    }
 
     public void setUsername(String username) {
         this.username = username;
@@ -276,20 +452,27 @@ public class ClientHandler implements Runnable {
         return username != null;
     }
 
-    @Override
-    public String toString() {
-        return username != null
-                ? username
-                : socket.getRemoteSocketAddress().toString();
-    }
-
     public Socket getSocket() {
         return socket;
     }
 
-    public void broadcast(String message) {
-        server.broadcast(this, message);
+    @Override
+    public String getUsername() {
+        return username;
     }
 
+    public ChatServer getServer() {
+        return server;
+    }
 
+    @Override
+    public String toString() {
+        return username != null ? username : socket.toString();
+    }
+
+    private void sendFrame(Frame frame) throws IOException {
+        synchronized (sendLock) {
+            FrameEncoder.write(frame, rawOut);
+        }
+    }
 }

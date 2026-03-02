@@ -12,13 +12,19 @@ public class BroadcastCommand implements Command {
 
     @Override
     public boolean requiresAuth() {
-        return true; // only logged-in users can broadcast
+        return true;
     }
 
     @Override
     public void execute(ClientHandler client, String[] args) {
-        String message = String.join(" ", args);
-        client.broadcast(message);
-    }
 
+        if (args.length == 0) {
+            client.send("Usage: BROAD <message>");
+            return;
+        }
+
+        String message = String.join(" ", args);
+
+        client.getServer().broadcast(client, message);
+    }
 }

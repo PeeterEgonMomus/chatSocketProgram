@@ -2,31 +2,30 @@ package org.example.chat.Client.bootstrap;
 
 import org.example.chat.Client.command.ConsoleCommandProcessor;
 import org.example.chat.Client.connection.ConnectionManager;
+import org.example.chat.Client.connection.FramedChatConnection;
 import org.example.chat.Client.crypto.ClientCrypto;
 import org.example.chat.Client.crypto.ClientEncryption;
+import org.example.chat.Client.crypto.ClientHandshakeCipher;
+import org.example.chat.Client.protocol.DefaultClientCipher;
 import org.example.chat.Client.protocol.FrameDispatcher;
 import org.example.chat.Client.protocol.HandshakeService;
 import org.example.chat.Client.runtime.ClientRuntime;
+
+import javax.crypto.SecretKey;
 
 public final class ChatClientMain {
 
     public static void main(String[] args) {
         try {
-            // 1️⃣ Crypto
-            ClientCrypto crypto = new ClientEncryption();
 
-            // 2️⃣ Handshake service
+            ClientHandshakeCipher handshakeCrypto =
+                    new ClientHandshakeCipher();
+
             HandshakeService handshakeService =
-                    new HandshakeService(crypto);
+                    new HandshakeService(handshakeCrypto);
 
-            // 3️⃣ Dispatcher
             FrameDispatcher dispatcher = new FrameDispatcher();
 
-            // 4️⃣ Command processor
-            ConsoleCommandProcessor commandProcessor =
-                    new ConsoleCommandProcessor(crypto);
-
-            // 5️⃣ Connection manager
             ConnectionManager connectionManager =
                     new ConnectionManager(
                             "localhost",
@@ -34,21 +33,14 @@ public final class ChatClientMain {
                             handshakeService
                     );
 
-            // 6️⃣ Runtime
-            ClientRuntime runtime = new ClientRuntime(
-                    connectionManager,
-                    dispatcher,
-                    commandProcessor,
-                    crypto
-            );
+            ClientRuntime runtime =
+                    new ClientRuntime(
+                            connectionManager,
+                            dispatcher
+                    );
 
-            // 7️⃣ Client facade
-            ChatClient client = new ChatClient(runtime);
+            runtime.start();
 
-            // 8️⃣ Start client
-            client.start();
-
-            // 🟢 KEEP JVM ALIVE
             Thread.currentThread().join();
 
         } catch (Exception e) {
