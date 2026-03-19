@@ -24,6 +24,13 @@ public enum FrameType {
     SEND_FILE_REQUEST(30),   // sender → server (routing request)
     SEND_FILE_READY(31),     // server → sender (recipient validated)
 
+    // GAME SYSTEM
+    GAME_INVITE(40),
+    GAME_ACCEPT(41),
+    GAME_DECLINE(42),
+    GAME_MOVE(43),
+    GAME_CANCEL(44),
+
 
     ERROR(6);
 

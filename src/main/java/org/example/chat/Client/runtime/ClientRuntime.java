@@ -1,24 +1,21 @@
 package org.example.chat.Client.runtime;
 
-import org.example.chat.Client.ClientMessageGateway;
-import org.example.chat.Client.CommandInputSource;
-import org.example.chat.Client.FramedConnectionGateway;
-import org.example.chat.Client.SystemConsoleInputSource;
+import org.example.chat.Client.gateway.ClientMessageGateway;
+import org.example.chat.Client.input.CommandInputSource;
+import org.example.chat.Client.gateway.FramedConnectionGateway;
+import org.example.chat.Client.input.SystemConsoleInputSource;
 import org.example.chat.Client.command.CommandProcessor;
 import org.example.chat.Client.command.ConsoleCommandProcessor;
 import org.example.chat.Client.command.strategy.CommandRegistry;
 import org.example.chat.Client.command.strategy.CommandRegistryBuilder;
 import org.example.chat.Client.connection.ConnectionManager;
 import org.example.chat.Client.connection.FramedChatConnection;
-import org.example.chat.Client.crypto.ClientCrypto;
 import org.example.chat.Client.crypto.ClientEncryption;
 import org.example.chat.Client.file.FileTransferService;
-import org.example.chat.Client.file.IncomingFileState;
 import org.example.chat.Client.file.IncomingTransferRegistry;
 import org.example.chat.Client.protocol.ClientHandlerBootstrap;
 import org.example.chat.Client.protocol.DefaultClientCipher;
 import org.example.chat.Client.protocol.FrameDispatcher;
-import org.example.chat.Client.protocol.HandshakeService;
 import org.example.chat.protocol.Frame;
 import org.example.chat.util.Logger;
 

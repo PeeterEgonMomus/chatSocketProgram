@@ -1,12 +1,11 @@
 package org.example.chat.Client.command;
 
-import org.example.chat.Client.ClientMessageGateway;
-import org.example.chat.Client.CommandInputSource;
+import org.example.chat.Client.gateway.ClientMessageGateway;
+import org.example.chat.Client.input.CommandInputSource;
 import org.example.chat.Client.command.strategy.CommandRegistry;
 import org.example.chat.Client.connection.FramedChatConnection;
 import org.example.chat.util.Logger;
 
-import java.io.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 

@@ -35,7 +35,7 @@ public final class FileTransferService {
 
         activeTransfers.put(transfer.getId(), transfer);
 
-        sendSendFileRequest(transfer);
+        sendFileRequest(transfer);
         sendOffer(transfer); // 🔥 immediately send offer
 
         Logger.debug("SEND_FILE_REQUEST + FILE_OFFER sent id=" + transfer.getId());
@@ -103,7 +103,7 @@ public final class FileTransferService {
         );
     }
 
-    private void sendSendFileRequest(ActiveOutgoingFileTransfer t) throws Exception {
+    private void sendFileRequest(ActiveOutgoingFileTransfer t) throws Exception {
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         DataOutputStream out = new DataOutputStream(baos);

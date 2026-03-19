@@ -1,4 +1,4 @@
-package org.example.chat.Client;
+package org.example.chat.Client.gateway;
 
 import org.example.chat.Client.connection.FramedChatConnection;
 import org.example.chat.protocol.Frame;
