@@ -5,10 +5,7 @@ import org.example.chat.auth.policy.*;
 import org.example.chat.commands.*;
 import org.example.chat.files.FileTransferManager;
 import org.example.chat.files.ServerFileTransferService;
-import org.example.chat.games.GameManager;
-import org.example.chat.games.GameRegistry;
-import org.example.chat.games.LeaderboardManager;
-import org.example.chat.games.RockPaperScissorsGame;
+import org.example.chat.games.*;
 import org.example.chat.handshake.HandshakeService;
 import org.example.chat.handshake.RSAHandshakeService;
 import org.example.chat.protocol.handlers.*;
@@ -126,6 +123,7 @@ public class ChatServer {
 
     private void registerGames() {
         gameRegistry.register(new RockPaperScissorsGame());
+        gameRegistry.register(new CoinFlipGame());
     }
 
     public ExecutorService getTransferExecutor() {
