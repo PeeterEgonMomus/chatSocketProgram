@@ -4,9 +4,23 @@ import org.example.chat.Command;
 import org.example.chat.ClientHandler;
 import org.example.chat.auth.*;
 
+/**
+ * Design choice:
+ * Command handles orchestration, not storage logic.
+ *
+ * Authentication logic is delegated to:
+ * - UserStore (data access)
+ * - PasswordHasher (security)
+ * - SessionManager (state)
+ *
+ * Key benefits:
+ * - Separation of concerns
+ * - Easier to evolve authentication independently
+ */
 public class LoginCommand implements Command {
+
     private final UserStore userStore;
-    private final UserSessionManager sessionManager; // ✅ New
+    private final UserSessionManager sessionManager;
 
     public LoginCommand(UserStore userStore, UserSessionManager sessionManager) {
         this.userStore = userStore;
@@ -20,6 +34,7 @@ public class LoginCommand implements Command {
 
     @Override
     public void execute(ClientHandler client, String[] args) {
+
         if (args.length < 2) {
             client.send("Usage: LOGIN <username> <password>");
             return;
@@ -29,20 +44,30 @@ public class LoginCommand implements Command {
         String password = args[1];
 
         userStore.getUser(username).ifPresentOrElse(user -> {
+
             if (PasswordHasher.verify(password, user.getSalt(), user.getPasswordHash())) {
+
+                /**
+                 * Design choice:
+                 * ClientHandler stores minimal session identity,
+                 * while SessionManager owns global session state.
+                 */
                 client.setUsername(username);
+
                 client.send("Login successful! Welcome " + username);
 
-                // ✅ Create or update the user session
-                UserSession session = new UserSession(username, client);
+                /**
+                 * Design choice:
+                 * Centralized session tracking enables:
+                 * - presence features
+                 * - multi-client management
+                 */
                 sessionManager.registerSession(username, client);
-
-                // Optional: notify all clients about the new online user
-                // sessionManager.broadcastOnlineUsers();
 
             } else {
                 client.send("Invalid password.");
             }
+
         }, () -> client.send("User not found."));
     }
 }

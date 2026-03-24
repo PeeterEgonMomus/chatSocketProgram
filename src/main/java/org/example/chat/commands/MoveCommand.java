@@ -2,14 +2,22 @@ package org.example.chat.commands;
 
 import org.example.chat.ClientHandler;
 import org.example.chat.Command;
-import org.example.chat.games.GameManager;
+import org.example.chat.games.GameService;
 
+/**
+ * Design choice:
+ * Commands delegate to GameService (application layer),
+ * NOT directly to GameManager.
+ *
+ * This ensures a single entry point for all game logic
+ * (commands + network frames).
+ */
 public class MoveCommand implements Command {
 
-    private final GameManager gameManager;
+    private final GameService gameService;
 
-    public MoveCommand(GameManager gameManager) {
-        this.gameManager = gameManager;
+    public MoveCommand(GameService gameService) {
+        this.gameService = gameService;
     }
 
     @Override
@@ -27,6 +35,6 @@ public class MoveCommand implements Command {
 
         String move = args[0];
 
-        gameManager.submitMove(client, move);
+        gameService.submitMove(client, move);
     }
 }
