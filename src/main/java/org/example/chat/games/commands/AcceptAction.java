@@ -3,6 +3,16 @@ package org.example.chat.games.commands;
 import org.example.chat.ClientHandler;
 import org.example.chat.games.GameService;
 
+/**
+ * Design choice:
+ * Handles the "accept game invite" action.
+ *
+ * This class is intentionally thin and delegates all business logic
+ * to GameService, keeping the command layer independent from domain logic.
+ *
+ * This separation ensures that changes in game rules or flow
+ * do not require modifications in this class (OCP).
+ */
 public class AcceptAction implements GameAction {
 
     private final GameService gameService;

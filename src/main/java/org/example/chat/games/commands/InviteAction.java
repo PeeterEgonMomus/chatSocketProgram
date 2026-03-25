@@ -3,6 +3,15 @@ package org.example.chat.games.commands;
 import org.example.chat.ClientHandler;
 import org.example.chat.games.*;
 
+/**
+ * Design choice:
+ * Handles sending a game invite to another player.
+ *
+ * This class validates input and delegates all business logic
+ * to GameService, which coordinates the invite flow.
+ *
+ * This keeps command handling simple and decoupled from game logic.
+ */
 public class InviteAction implements GameAction {
 
     private final GameService gameService;

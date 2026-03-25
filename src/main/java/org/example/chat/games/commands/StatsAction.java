@@ -3,6 +3,13 @@ package org.example.chat.games.commands;
 import org.example.chat.ClientHandler;
 import org.example.chat.games.GameService;
 
+/**
+ * Design choice:
+ * Retrieves statistics for the current player in a given game.
+ *
+ * Argument validation is handled here, while GameService
+ * is responsible for data retrieval and formatting.
+ */
 public class StatsAction implements GameAction {
 
     private final GameService gameService;
