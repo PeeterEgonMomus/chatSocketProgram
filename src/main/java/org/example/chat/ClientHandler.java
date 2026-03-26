@@ -16,6 +16,72 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import org.example.chat.auth.UserSessionManager;
 
+/**
+ * Design choice:
+ * Represents a single connected client.
+ *
+ * ClientHandler is the per-connection runtime container.
+ *
+ * Responsibilities:
+ * - Own the client socket
+ * - Perform handshake
+ * - Read frames
+ * - Route frames
+ * - Send encrypted responses
+ * - Manage client session state
+ *
+ * ---------------------------------------------------------
+ * Architectural Role
+ * ---------------------------------------------------------
+ *
+ * ClientHandler sits between:
+ *
+ *   Network (Socket)
+ *   ↓
+ *   FrameDecoder / Encoder
+ *   ↓
+ *   FrameRouter
+ *   ↓
+ *   Services / Domain
+ *
+ * It acts as:
+ * - Transport adapter
+ * - Encryption boundary
+ * - Session entry point
+ *
+ * ---------------------------------------------------------
+ * Important Design Decisions:
+ * ---------------------------------------------------------
+ *
+ * 1) Encryption is delegated to EncryptionService.
+ *    ClientHandler never implements cryptography itself.
+ *
+ * 2) Frame routing is delegated to FrameRouter.
+ *    ClientHandler does not interpret frame meaning.
+ *
+ * 3) Session registration occurs only after authentication.
+ *
+ * 4) sendLock ensures thread-safe writes to the socket.
+ *
+ * ---------------------------------------------------------
+ * Concurrency Model:
+ * ---------------------------------------------------------
+ *
+ * Each ClientHandler runs in its own thread.
+ * Sending is synchronized to avoid frame interleaving.
+ *
+ * ---------------------------------------------------------
+ * Cleanup Guarantees:
+ * ---------------------------------------------------------
+ *
+ * On disconnect:
+ * - Socket closes
+ * - Encryption keys removed
+ * - Session removed
+ * - File transfers aborted
+ *
+ * This prevents memory leaks and dangling state.
+ */
 public class ClientHandler implements Runnable, FileTransferPeer {
 
     private final Socket socket;

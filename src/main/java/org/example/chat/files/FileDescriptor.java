@@ -1,5 +1,36 @@
 package org.example.chat.files;
 
+
+/**
+ * Design choice:
+ * Immutable metadata container for a file transfer.
+ *
+ * Represents:
+ * - Transfer ID
+ * - Filename
+ * - File size
+ * - Expected checksum
+ *
+ * ---------------------------------------------------------
+ * Architectural Role
+ * ---------------------------------------------------------
+ *
+ * This is a Value Object.
+ *
+ * It contains:
+ * - No behavior
+ * - No state mutation
+ *
+ * Immutable design ensures:
+ * - Thread safety
+ * - Predictable transfer validation
+ *
+ * ---------------------------------------------------------
+ * Used for:
+ * - Offer negotiation
+ * - Upload validation
+ * - Integrity checking
+ */
 public final class FileDescriptor {
 
     private final String id;

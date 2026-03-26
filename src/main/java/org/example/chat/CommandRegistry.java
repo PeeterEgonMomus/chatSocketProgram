@@ -4,21 +4,54 @@ import java.util.*;
 
 /**
  * Design choice:
- * Centralized command dispatcher.
+ * Centralized Command Dispatch Engine.
  *
- * Instead of spreading command lookup and execution logic across the system,
- * this class owns:
- * - command registration
- * - command resolution
- * - cross-cutting concerns (auth enforcement)
+ * This class implements the Command Pattern coordinator.
  *
- * Key benefits:
- * - Single Responsibility: routing + enforcement in one place
- * - OCP: new commands are added via registration only
- * - Consistency: all commands follow the same execution flow
+ * Responsibilities:
+ * - Command registration
+ * - Command lookup
+ * - Authentication enforcement
+ * - Execution pipeline
  *
- * Trade-off:
- * - Becomes a central hub → must avoid adding too many responsibilities
+ * ---------------------------------------------------------
+ * Architectural Role
+ * ---------------------------------------------------------
+ *
+ * This sits above the Protocol Layer and below ClientHandler.
+ *
+ * Flow:
+ *
+ * Client sends text
+ *     ↓
+ * ClientHandler extracts string
+ *     ↓
+ * CommandRegistry.executeCommand(...)
+ *     ↓
+ * Command.execute(...)
+ *
+ * ---------------------------------------------------------
+ * Why Centralize Execution?
+ * ---------------------------------------------------------
+ *
+ * Without this registry:
+ * - ClientHandler would grow large
+ * - Auth checks would be duplicated
+ * - Parsing logic would scatter
+ *
+ * Centralizing provides:
+ * - Consistency
+ * - Single enforcement point
+ * - Easy extensibility
+ *
+ * ---------------------------------------------------------
+ * Design Principles Applied:
+ * ---------------------------------------------------------
+ *
+ * - Single Responsibility
+ * - Open/Closed Principle
+ * - Strategy Pattern
+ * - Plugin architecture (via ServiceLoader)
  */
 public class CommandRegistry {
 
@@ -50,15 +83,18 @@ public class CommandRegistry {
     }
 
     /**
-     * Design choice:
-     * Central execution pipeline.
+     * Main execution pipeline for commands.
      *
-     * Responsibilities kept here:
-     * - parsing
-     * - lookup
-     * - auth enforcement
+     * Steps:
+     * 1. Validate input
+     * 2. Parse command name
+     * 3. Lookup command
+     * 4. Enforce authentication
+     * 5. Extract arguments
+     * 6. Delegate execution
      *
-     * This prevents duplication across commands.
+     * This method intentionally contains
+     * the cross-cutting concerns of command execution.
      */
     public void executeCommand(ClientHandler client, String input) {
 

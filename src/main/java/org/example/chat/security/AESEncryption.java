@@ -7,6 +7,43 @@ import javax.crypto.spec.SecretKeySpec;
 import java.security.SecureRandom;
 import java.util.Base64;
 
+
+/**
+ * Design choice:
+ * Implements AES-256 encryption using GCM mode.
+ *
+ * Responsibilities:
+ * - Encrypt plaintext bytes using AES
+ * - Decrypt ciphertext bytes using AES
+ * - Generate secure random AES keys
+ * - Attach IV to ciphertext
+ * - Support optional AAD (Additional Authenticated Data)
+ *
+ * Security Model:
+ * - AES/GCM provides:
+ *     • Confidentiality
+ *     • Integrity (authentication tag)
+ * - Each encryption generates a new random IV
+ * - IV is prepended to ciphertext for transport
+ *
+ * It does NOT:
+ * - Manage client sessions
+ * - Perform handshake
+ * - Store client mappings
+ *
+ * Architectural Role:
+ * - Session-level symmetric encryption
+ * - Used after handshake is completed
+ *
+ * Safety Features:
+ * - 256-bit key strength
+ * - 128-bit authentication tag
+ * - Random IV per message
+ *
+ * Logging:
+ * - Debug logs for encryption/decryption size tracing
+ * - Error logs for cryptographic failures
+ */
 public class AESEncryption implements EncryptionStrategy {
     private static final String TRANSFORM = "AES/GCM/NoPadding";
     private static final int AES_KEY_BITS = 256;

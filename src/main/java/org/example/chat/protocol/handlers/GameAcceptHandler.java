@@ -8,6 +8,27 @@ import org.example.chat.protocol.*;
 
 import java.io.DataInputStream;
 
+
+/**
+ * Design choice:
+ * Handles GAME_ACCEPT frames.
+ *
+ * This class belongs strictly to the protocol handling layer.
+ *
+ * Responsibilities:
+ * - Decode inviter username from frame
+ * - Delegate accept logic to GameService
+ *
+ * It intentionally avoids:
+ * - Direct interaction with GameManager
+ * - Session creation logic
+ *
+ * This ensures:
+ * - Protocol layer remains stateless
+ * - Domain logic stays centralized
+ *
+ * Follows the Single Responsibility Principle.
+ */
 public class GameAcceptHandler implements FrameHandler {
 
     private final GameService gameService;

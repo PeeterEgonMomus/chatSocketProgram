@@ -6,9 +6,70 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Simple thread-safe logger that writes to stdout and to a file.
- * Log file path can be set with system property "chat.log.path" or environment var "CHAT_LOG_PATH".
- * Defaults to "./chat.log".
+ * Design choice:
+ * Lightweight centralized logging utility.
+ *
+ * This class provides:
+ * - Thread-safe logging
+ * - Console + file output
+ * - Simple severity levels (INFO, DEBUG, ERROR)
+ * - Automatic startup/shutdown markers
+ *
+ * ---------------------------------------------------------
+ * Architectural Role
+ * ---------------------------------------------------------
+ *
+ * Logger is an Infrastructure Utility.
+ *
+ * It is intentionally:
+ * - Static
+ * - Globally accessible
+ * - Stateless (except file handle)
+ *
+ * This keeps logging simple and dependency-free.
+ *
+ * ---------------------------------------------------------
+ * Thread Safety Strategy
+ * ---------------------------------------------------------
+ *
+ * A single LOCK object guards:
+ * - Console writes
+ * - File writes
+ * - Stack traces
+ *
+ * This prevents:
+ * - Interleaved log lines
+ * - Corrupted file output
+ *
+ * ---------------------------------------------------------
+ * Configuration Strategy
+ * ---------------------------------------------------------
+ *
+ * Log path resolution order:
+ * 1. System property: chat.log.path
+ * 2. Environment variable: CHAT_LOG_PATH
+ * 3. Default: ./chat.log
+ *
+ * This allows flexible deployment configuration.
+ *
+ * ---------------------------------------------------------
+ * Trade-offs:
+ * ---------------------------------------------------------
+ *
+ * Pros:
+ * - Zero dependencies
+ * - Easy to use
+ * - Predictable
+ *
+ * Cons:
+ * - No log rotation
+ * - No async logging
+ * - No log levels filtering
+ *
+ * Suitable for:
+ * - Small server
+ * - Learning architecture
+ * - Controlled environment
  */
 public class Logger {
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");

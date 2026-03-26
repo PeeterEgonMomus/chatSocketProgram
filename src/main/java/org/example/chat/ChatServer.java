@@ -22,6 +22,72 @@ import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+
+/**
+ * Design choice:
+ * Central composition root of the entire application.
+ *
+ * ChatServer is responsible for:
+ *
+ * - Wiring together all subsystems
+ * - Owning shared infrastructure
+ * - Managing client lifecycle
+ * - Bootstrapping the server
+ *
+ * It acts as the application's Dependency Assembly Layer.
+ *
+ * ---------------------------------------------------------
+ * Architectural Role
+ * ---------------------------------------------------------
+ *
+ * ChatServer does NOT contain:
+ * - Game logic
+ * - Authentication logic
+ * - Encryption logic
+ * - File transfer logic
+ *
+ * Instead, it composes and connects:
+ *
+ *  Protocol Layer
+ *  Security Layer
+ *  Authentication Layer
+ *  Command Layer
+ *  Game Domain
+ *  File Transfer Subsystem
+ *
+ * This follows the Composition Root pattern.
+ *
+ * ---------------------------------------------------------
+ * Why this is important:
+ * ---------------------------------------------------------
+ *
+ * All dependencies are created in ONE place.
+ * Nothing instantiates dependencies deep inside the system.
+ *
+ * This ensures:
+ * - Clear ownership
+ * - Testability
+ * - Clean layering
+ * - No circular dependencies
+ *
+ * ---------------------------------------------------------
+ * Concurrency Model:
+ * ---------------------------------------------------------
+ *
+ * - Each client runs in its own thread (ClientHandler).
+ * - File transfers use a dedicated thread pool.
+ * - Game sessions use scheduled executors for timers.
+ *
+ * ChatServer coordinates but does not manage fine-grained concurrency.
+ *
+ * ---------------------------------------------------------
+ * High-Level Flow:
+ * ---------------------------------------------------------
+ *
+ * Socket → ClientHandler → FrameRouter → Handler → Service → Domain
+ *
+ * ChatServer is the top-level orchestrator.
+ */
 public class ChatServer {
 
     private final List<ClientHandler> clients = new java.util.concurrent.CopyOnWriteArrayList<>();

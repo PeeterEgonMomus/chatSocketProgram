@@ -9,6 +9,39 @@ import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+
+/**
+ * Design choice:
+ * Implements Hybrid Encryption (RSA + AES).
+ *
+ * Hybrid Model:
+ * - RSA is used during handshake
+ * - AES is used for all session communication
+ *
+ * Responsibilities:
+ * - Provide server public key (RSA)
+ * - Decrypt client AES key using RSA private key
+ * - Maintain per-client AES sessions
+ * - Encrypt/decrypt payloads using AES
+ * - Bind FrameType as AAD for integrity protection
+ *
+ * It does NOT:
+ * - Perform network I/O
+ * - Interpret protocol logic
+ *
+ * Architectural Role:
+ * - Core cryptographic engine
+ * - Manages session isolation per client
+ *
+ * Security Design:
+ * - Each client has independent AES session
+ * - FrameType is used as AAD to prevent type tampering
+ * - ConcurrentHashMap ensures thread-safe session storage
+ *
+ * Failure Handling:
+ * - Missing session → IllegalStateException
+ * - Crypto failures logged and propagated
+ */
 public class HybridEncryption {
 
     private final RSAEncryption rsa;

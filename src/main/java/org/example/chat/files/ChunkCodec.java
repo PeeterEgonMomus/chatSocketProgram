@@ -2,6 +2,38 @@ package org.example.chat.files;
 
 import java.io.*;
 
+
+/**
+ * Design choice:
+ * Serialization utility for FILE_CHUNK payloads.
+ *
+ * Encodes:
+ * - transferId (UTF)
+ * - chunk index (int)
+ * - chunk length (int)
+ * - raw data bytes
+ *
+ * ---------------------------------------------------------
+ * Architectural Role
+ * ---------------------------------------------------------
+ *
+ * Pure transport codec.
+ *
+ * It contains:
+ * - No business logic
+ * - No validation
+ * - No encryption
+ *
+ * It simply defines the wire format.
+ *
+ * ---------------------------------------------------------
+ * Why Separate Codec?
+ * ---------------------------------------------------------
+ *
+ * - Keeps transfer logic clean
+ * - Centralizes payload format
+ * - Avoids duplication
+ */
 public final class ChunkCodec {
 
     private ChunkCodec() {}

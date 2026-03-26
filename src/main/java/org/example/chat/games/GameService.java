@@ -5,6 +5,31 @@ import org.example.chat.ClientHandler;
 import java.util.Collection;
 import java.util.Map;
 
+
+/**
+ * Design choice:
+ * Application service layer for the game subsystem.
+ *
+ * This class acts as the boundary between:
+ * - Command layer (chat commands)
+ * - Domain/game infrastructure
+ *
+ * It performs:
+ * - Validation
+ * - User lookup
+ * - Error handling
+ * - Response messaging
+ *
+ * It delegates core logic to:
+ * - GameManager
+ * - GameRegistry
+ * - LeaderboardManager
+ *
+ * This keeps command classes thin and prevents
+ * business logic leakage into the chat layer.
+ *
+ * This is effectively a Facade over the game subsystem.
+ */
 public class GameService {
 
     private final GameManager gameManager;

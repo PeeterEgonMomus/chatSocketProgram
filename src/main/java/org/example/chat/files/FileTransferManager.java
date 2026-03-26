@@ -4,6 +4,50 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+
+/**
+ * Design choice:
+ * Central registry and lifecycle manager
+ * for all active file transfers.
+ *
+ * ---------------------------------------------------------
+ * Architectural Role
+ * ---------------------------------------------------------
+ *
+ * FileTransferManager is the Coordinator of the subsystem.
+ *
+ * It owns:
+ * - Transfer storage (ConcurrentHashMap)
+ * - Transfer creation
+ * - Transfer removal
+ * - Bulk abort operations
+ * - Delivery executor access
+ *
+ * It does NOT:
+ * - Implement transfer logic (ActiveFileTransfer does)
+ *
+ * ---------------------------------------------------------
+ * Concurrency Model:
+ * ---------------------------------------------------------
+ *
+ * - ConcurrentHashMap ensures thread-safe storage.
+ * - No global locking required.
+ * - Executor handles asynchronous delivery.
+ *
+ * ---------------------------------------------------------
+ * Safety Guarantees:
+ * ---------------------------------------------------------
+ *
+ * abort():
+ * - Ensures partial transfers are cleaned.
+ *
+ * abortTransfersForPeer():
+ * - Critical for handling disconnects.
+ *
+ * Prevents:
+ * - Resource leaks
+ * - Orphaned transfers
+ */
 public final class FileTransferManager {
 
     private final ConcurrentHashMap<String, ActiveFileTransfer> transfers =

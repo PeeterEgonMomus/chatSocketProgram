@@ -3,6 +3,28 @@ package org.example.chat.games;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Design choice:
+ * Central manager for all leaderboards across games.
+ *
+ * Responsibilities:
+ * - Maintain separate leaderboards per game
+ * - Record match results
+ * - Provide player statistics
+ * - Provide leaderboard views
+ *
+ * Uses lazy initialization via computeIfAbsent
+ * to create leaderboards on demand.
+ *
+ * This ensures:
+ * - No pre-registration required
+ * - Scalability for many games
+ *
+ * Thread-safe via ConcurrentHashMap.
+ *
+ * Keeps statistical tracking completely separate
+ * from GameSession logic.
+ */
 public class LeaderboardManager {
 
     private final Map<String, Leaderboard> leaderboards = new ConcurrentHashMap<>();

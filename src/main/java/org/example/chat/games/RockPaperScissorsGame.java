@@ -2,6 +2,27 @@ package org.example.chat.games;
 
 import java.util.Set;
 
+/**
+ * Design choice:
+ * Strategy-style Game implementation for Rock-Paper-Scissors.
+ *
+ * This class encapsulates only rule evaluation logic.
+ * It contains no networking, session, or leaderboard logic.
+ *
+ * The switch expression keeps resolution explicit and readable,
+ * avoiding deeply nested conditionals.
+ *
+ * Configured as:
+ * - Best of 3 (2 rounds to win)
+ * - 10 second move timeout
+ *
+ * Demonstrates how different games can define:
+ * - Custom win conditions
+ * - Different match lengths
+ * - Different move sets
+ *
+ * All without modifying GameManager or GameSession (OCP).
+ */
 public class RockPaperScissorsGame implements Game {
 
     private static final Set<String> MOVES =

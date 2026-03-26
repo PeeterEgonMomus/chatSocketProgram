@@ -7,6 +7,37 @@ import java.security.*;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
+
+/**
+ * Design choice:
+ * Implements RSA asymmetric encryption.
+ *
+ * Responsibilities:
+ * - Generate server RSA key pair (2048-bit)
+ * - Decrypt data using private key
+ * - Encrypt data using public key
+ * - Export public key for handshake
+ *
+ * Primary Usage:
+ * - Secure AES key exchange during handshake
+ *
+ * It does NOT:
+ * - Encrypt regular session traffic
+ * - Manage client sessions
+ *
+ * Architectural Role:
+ * - Asymmetric bootstrap mechanism
+ * - Trust establishment layer
+ *
+ * Security Notes:
+ * - 2048-bit key strength
+ * - Uses Base64 for safe transport
+ *
+ * Logging:
+ * - Logs key generation
+ * - Logs encryption/decryption operations
+ * - Logs failure scenarios
+ */
 public class RSAEncryption implements EncryptionStrategy {
     private final KeyPair keyPair;
 

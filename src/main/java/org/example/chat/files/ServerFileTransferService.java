@@ -10,6 +10,49 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.nio.charset.StandardCharsets;
 
+
+/**
+ * Design choice:
+ * Protocol adapter for file transfer frames.
+ *
+ * This class bridges:
+ *
+ *   Frame Layer
+ *   ↓
+ *   FileTransferManager
+ *   ↓
+ *   ActiveFileTransfer
+ *
+ * ---------------------------------------------------------
+ * Responsibilities:
+ * ---------------------------------------------------------
+ *
+ * - Decrypt frame payloads
+ * - Validate client permissions
+ * - Validate transfer ownership
+ * - Forward offers
+ * - Trigger state transitions
+ *
+ * It does NOT:
+ * - Store transfers
+ * - Implement transfer state machine
+ * - Perform file I/O
+ *
+ * Those responsibilities are delegated.
+ *
+ * ---------------------------------------------------------
+ * Architectural Pattern:
+ * ---------------------------------------------------------
+ *
+ * This is an Application Service.
+ *
+ * It coordinates:
+ * - Protocol
+ * - Session management
+ * - Transfer domain
+ *
+ * Without containing domain state itself.
+ */
 public class ServerFileTransferService {
 
     private final FileTransferManager manager;

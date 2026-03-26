@@ -6,6 +6,30 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 
+/**
+ * Design choice:
+ * Responsible for serializing Frame objects
+ * into raw bytes for network transmission.
+ *
+ * Responsibilities:
+ * - Write type byte
+ * - Write payload length
+ * - Write payload
+ * - Flush output
+ *
+ * It does NOT:
+ * - Encrypt data
+ * - Modify payload
+ *
+ * Encryption occurs before frame creation.
+ *
+ * This strict separation ensures:
+ * - Encoder remains simple
+ * - Encryption logic stays centralized
+ * - Transport format is consistent
+ *
+ * Logging provides visibility for debugging.
+ */
 public final class FrameEncoder {
 
     private FrameEncoder() {}

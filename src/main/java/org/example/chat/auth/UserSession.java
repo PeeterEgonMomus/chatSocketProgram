@@ -4,10 +4,22 @@ import org.example.chat.ClientHandler;
 import java.net.Socket;
 import java.time.LocalDateTime;
 
+/**
+ * Represents an authenticated user session.
+ *
+ * A session binds:
+ * - Username
+ * - Chat connection (ClientHandler)
+ * - Optional file transfer socket
+ * - Login timestamp
+ *
+ * This is runtime state — not persistent data.
+ */
 public class UserSession {
+
     private final String username;
     private final ClientHandler chatHandler;
-    private Socket fileSocket; // optional file transfer socket
+    private Socket fileSocket; // Optional secondary channel
     private final LocalDateTime loginTime;
 
     public UserSession(String username, ClientHandler chatHandler) {

@@ -5,6 +5,18 @@ import org.example.chat.files.ServerFileTransferService;
 import org.example.chat.protocol.FrameContext;
 import org.example.chat.protocol.FrameType;
 
+/**
+ * Handles FILE_CHUNK frames.
+ *
+ * Each frame contains a chunk of file bytes.
+ *
+ * The transfer service:
+ * - Assembles chunks
+ * - Tracks progress
+ * - Handles buffering or disk writing
+ *
+ * This class remains protocol-only.
+ */
 public class FileChunkHandler implements FrameHandler {
 
     private final ServerFileTransferService transfers;

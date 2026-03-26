@@ -2,6 +2,32 @@ package org.example.chat.protocol;
 
 import java.util.Arrays;
 
+/**
+ * Design choice:
+ * Immutable representation of a protocol frame.
+ *
+ * A frame consists of:
+ * - FrameType (1 byte)
+ * - Payload length (4 bytes)
+ * - Payload (byte[])
+ *
+ * This class is intentionally:
+ * - Simple
+ * - Immutable
+ * - Transport-focused
+ *
+ * It contains no:
+ * - Encryption logic
+ * - Parsing logic
+ * - Business meaning
+ *
+ * It is purely a protocol data structure.
+ *
+ * Immutability ensures:
+ * - Thread safety
+ * - Predictable routing
+ * - No accidental mutation during handling
+ */
 public final class Frame {
     private final FrameType type;
     private final byte[] payload;

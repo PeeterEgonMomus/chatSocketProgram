@@ -3,6 +3,28 @@ package org.example.chat.games;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
+
+/**
+ * Design choice:
+ * Concrete Game implementation representing a simple coin flip match.
+ *
+ * This class contains only rule logic and no session or player state.
+ * It is therefore fully stateless and thread-safe.
+ *
+ * Randomness is encapsulated inside resolveMove(),
+ * while match lifecycle and timing are handled by GameSession.
+ *
+ * Keeping randomness inside the Game implementation ensures:
+ * - Each game defines its own resolution mechanics.
+ * - GameSession remains generic and reusable.
+ *
+ * The game is configured as:
+ * - Single round match
+ * - 10 second timeout
+ *
+ * This demonstrates how different games can customize match rules
+ * without changing infrastructure code.
+ */
 public class CoinFlipGame implements Game {
 
     private static final Set<String> MOVES =

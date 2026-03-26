@@ -6,6 +6,36 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
+
+/**
+ * Design choice:
+ * Responsible for decoding raw bytes from an InputStream
+ * into structured Frame objects.
+ *
+ * Responsibilities:
+ * - Read type byte
+ * - Read payload length
+ * - Read payload bytes
+ * - Perform basic validation
+ *
+ * It does NOT:
+ * - Decrypt payload
+ * - Interpret payload
+ * - Execute logic
+ *
+ * This keeps transport parsing separate from:
+ * - Encryption
+ * - Application logic
+ *
+ * Safety Features:
+ * - Length validation prevents memory abuse
+ * - Clean EOF handling returns null
+ *
+ * Logging:
+ * - Debug logging allows protocol tracing
+ *
+ * This class represents the lowest-level protocol boundary.
+ */
 public final class FrameDecoder {
 
     private FrameDecoder() {}

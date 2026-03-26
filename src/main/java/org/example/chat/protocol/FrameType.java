@@ -1,5 +1,31 @@
 package org.example.chat.protocol;
 
+/**
+ * Design choice:
+ * Enumerates all valid protocol frame types.
+ *
+ * Each FrameType has a unique byte identifier
+ * used for network transmission.
+ *
+ * Why enum?
+ * - Type safety
+ * - Centralized protocol definition
+ * - Prevents magic numbers
+ *
+ * Architectural Importance:
+ * This enum defines the entire wire protocol contract.
+ *
+ * Adding a new feature requires:
+ * - Adding a new FrameType
+ * - Implementing a handler
+ * - Registering it in FrameRouter
+ *
+ * This makes protocol evolution explicit and controlled.
+ *
+ * fromId(byte):
+ * Provides reverse lookup from network value
+ * to strongly-typed enum.
+ */
 public enum FrameType {
     HANDSHAKE_SERVER_KEY(10),
     HANDSHAKE_CLIENT_KEY(11),

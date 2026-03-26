@@ -2,18 +2,45 @@ package org.example.chat;
 
 /**
  * Design choice:
- * This defines the Command Pattern contract.
+ * Command Pattern abstraction.
  *
- * Instead of hardcoding logic in if/else or switch statements,
- * each action is encapsulated as its own object.
+ * Each command encapsulates:
+ * - A name
+ * - Its execution logic
+ * - Optional metadata (auth requirement, description)
  *
- * Key benefits:
- * - OCP: new commands can be added without modifying existing code
- * - Decoupling: ClientHandler does not need to know command logic
- * - Testability: commands can be tested in isolation
+ * ---------------------------------------------------------
+ * Architectural Role
+ * ---------------------------------------------------------
  *
- * Trade-off:
- * - Slight increase in number of classes (intentional for scalability)
+ * Commands represent user-triggered actions.
+ *
+ * Instead of:
+ *   if (cmd.equals("LOGIN")) { ... }
+ *
+ * We use:
+ *   Command objects with polymorphism.
+ *
+ * ---------------------------------------------------------
+ * Benefits:
+ * ---------------------------------------------------------
+ *
+ * - Extensible without modifying dispatcher
+ * - Isolated logic
+ * - Easier unit testing
+ * - Supports plugin discovery
+ *
+ * ---------------------------------------------------------
+ * Default Methods:
+ * ---------------------------------------------------------
+ *
+ * requiresAuth():
+ *   Allows declarative security.
+ *
+ * getDescription():
+ *   Enables future help system expansion.
+ *
+ * This design anticipates future growth.
  */
 public interface Command {
 

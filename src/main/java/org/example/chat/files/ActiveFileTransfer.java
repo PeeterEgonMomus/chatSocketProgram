@@ -3,6 +3,72 @@ package org.example.chat.files;
 import org.example.chat.PendingFile;
 import org.example.chat.util.Logger;
 
+
+/**
+ * Design choice:
+ * Stateful transfer controller (Transfer State Machine).
+ *
+ * ActiveFileTransfer represents ONE logical file transfer
+ * between exactly two peers.
+ *
+ * ---------------------------------------------------------
+ * Architectural Role
+ * ---------------------------------------------------------
+ *
+ * This is the Domain Object of the File Transfer subsystem.
+ *
+ * It owns:
+ * - Transfer identity
+ * - Sender and recipient
+ * - Current state
+ * - Upload session
+ * - Pending delivery
+ *
+ * It does NOT:
+ * - Manage storage of all transfers (FileTransferManager does that)
+ * - Perform encryption (ClientHandler does that)
+ *
+ * ---------------------------------------------------------
+ * Core Concept:
+ * ---------------------------------------------------------
+ *
+ * This class implements a finite state machine.
+ *
+ * State transitions:
+ *
+ * INIT
+ *   ↓
+ * WAITING_FOR_RECIPIENT
+ *   ↓ (accept)
+ * UPLOADING
+ *   ↓
+ * OFFERED
+ *   ↓
+ * DELIVERING
+ *   ↓
+ * COMPLETED | FAILED | REJECTED | ABORTED
+ *
+ * Every public method validates state before acting.
+ *
+ * ---------------------------------------------------------
+ * Concurrency Model:
+ * ---------------------------------------------------------
+ *
+ * - Most mutating operations are synchronized.
+ * - Delivery runs asynchronously via executor.
+ * - State changes are controlled and logged.
+ *
+ * This prevents race conditions during upload.
+ *
+ * ---------------------------------------------------------
+ * Design Strength:
+ * ---------------------------------------------------------
+ *
+ * All transfer rules are centralized here.
+ * No other class is allowed to bypass state validation.
+ *
+ * This protects protocol correctness.
+ */
 public final class ActiveFileTransfer {
 
     public enum State {

@@ -7,6 +7,43 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.Base64;
 
+
+/**
+ * Design choice:
+ * Handles the low-level receiving side of a file upload.
+ *
+ * This class is responsible for:
+ * - Writing chunks to disk
+ * - Tracking chunk order
+ * - Tracking size
+ * - Validating checksum
+ *
+ * ---------------------------------------------------------
+ * Architectural Role
+ * ---------------------------------------------------------
+ *
+ * This is the Integrity Enforcement Layer.
+ *
+ * It ensures:
+ * - No chunk reordering
+ * - No size mismatch
+ * - No tampered file (SHA-256 validation)
+ *
+ * ---------------------------------------------------------
+ * Security Measures:
+ * ---------------------------------------------------------
+ *
+ * - Enforces MAX_FILE_SIZE limit
+ * - Strips path from filename (prevents path traversal)
+ * - Verifies checksum before accepting file
+ *
+ * ---------------------------------------------------------
+ * Failure Strategy:
+ * ---------------------------------------------------------
+ *
+ * Any mismatch → IllegalStateException.
+ * Fail fast to prevent corrupted file storage.
+ */
 public final class FileTransferSession {
 
     private static final int MAX_FILE_SIZE = 100_000_000;

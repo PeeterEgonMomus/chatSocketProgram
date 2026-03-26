@@ -5,6 +5,36 @@ import org.example.chat.ClientHandler;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+
+/**
+ * Design choice:
+ * Central coordination component of the game system.
+ *
+ * Responsibilities:
+ * - Manage invites
+ * - Track active sessions
+ * - Handle rematch logic
+ * - Control game lifecycle transitions
+ *
+ * This class does NOT:
+ * - Resolve game rules
+ * - Handle networking
+ * - Manage leaderboard statistics
+ *
+ * Those responsibilities are delegated to:
+ * - Game (rule logic)
+ * - GameSession (match runtime state)
+ * - LeaderboardManager (statistics)
+ *
+ * Uses ConcurrentHashMap for thread safety since:
+ * - Multiple clients interact concurrently.
+ * - Game actions may occur in parallel.
+ *
+ * This class acts as the orchestration layer
+ * between high-level commands and low-level session execution.
+ *
+ * Follows SRP by focusing strictly on lifecycle coordination.
+ */
 public class GameManager {
 
     private final Map<String, GameInvite> invites = new ConcurrentHashMap<>();

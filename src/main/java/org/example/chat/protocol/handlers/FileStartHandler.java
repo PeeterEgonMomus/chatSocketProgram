@@ -5,6 +5,14 @@ import org.example.chat.files.ServerFileTransferService;
 import org.example.chat.protocol.FrameContext;
 import org.example.chat.protocol.FrameType;
 
+/**
+ * Handles FILE_START frames.
+ *
+ * Indicates that actual file data transmission is about to begin.
+ *
+ * The handler does not track transfer state —
+ * that responsibility belongs to ServerFileTransferService.
+ */
 public class FileStartHandler implements FrameHandler {
 
     private final ServerFileTransferService transfers;

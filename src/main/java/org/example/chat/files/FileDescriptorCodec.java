@@ -2,6 +2,19 @@ package org.example.chat.files;
 
 import java.io.*;
 
+
+/**
+ * Design choice:
+ * Codec for serializing/deserializing FileDescriptor.
+ *
+ * Keeps:
+ * - Wire format separate
+ * - Descriptor class immutable and clean
+ *
+ * Follows the same transport separation principle:
+ *
+ * Domain Object  ≠  Transport Format
+ */
 public final class FileDescriptorCodec {
 
     private FileDescriptorCodec() {}

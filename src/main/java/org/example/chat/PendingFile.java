@@ -7,6 +7,42 @@ import org.example.chat.util.Logger;
 
 import java.io.*;
 
+
+/**
+ * Design choice:
+ * Represents a fully uploaded file
+ * that is ready to be delivered to recipient.
+ *
+ * ---------------------------------------------------------
+ * Architectural Role
+ * ---------------------------------------------------------
+ *
+ * PendingFile is the Delivery Executor.
+ *
+ * It:
+ * - Sends FILE_START
+ * - Streams FILE_CHUNK frames
+ * - Sends FILE_END
+ *
+ * This class does NOT:
+ * - Manage upload
+ * - Validate integrity
+ * - Manage transfer state
+ *
+ * It only handles outgoing streaming.
+ *
+ * ---------------------------------------------------------
+ * Streaming Strategy:
+ * ---------------------------------------------------------
+ *
+ * - Reads file in fixed-size chunks (4 KB)
+ * - Encodes each chunk
+ * - Sends encrypted frame
+ *
+ * This ensures:
+ * - Controlled memory usage
+ * - Protocol consistency
+ */
 public final class PendingFile {
 
     private static final int CHUNK_SIZE = 4096;

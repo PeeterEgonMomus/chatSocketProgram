@@ -8,6 +8,23 @@ import org.example.chat.protocol.*;
 
 import java.io.DataInputStream;
 
+/**
+ * Design choice:
+ * Handles GAME_DECLINE frames from clients.
+ *
+ * Thin protocol adapter that:
+ * - Extracts inviter username
+ * - Delegates decline logic to GameService
+ *
+ * This class does not:
+ * - Check invite validity
+ * - Modify GameManager state directly
+ *
+ * All business rules are centralized inside GameService and GameManager.
+ *
+ * This enforces clean architectural boundaries
+ * and prevents duplicated validation logic.
+ */
 public class GameDeclineHandler implements FrameHandler {
 
     private final GameService gameService;

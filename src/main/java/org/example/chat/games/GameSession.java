@@ -4,6 +4,37 @@ import org.example.chat.ClientHandler;
 
 import java.util.concurrent.*;
 
+
+/**
+ * Design choice:
+ * Represents a single active match between two players.
+ *
+ * Responsibilities:
+ * - Store match state
+ * - Track scores
+ * - Manage round progression
+ * - Handle timeouts
+ * - Determine match winner
+ *
+ * This class encapsulates ALL runtime match state.
+ *
+ * Concurrency:
+ * - submitMove() is synchronized to prevent race conditions.
+ * - A ScheduledExecutorService handles move timeouts.
+ * - Timer cancellation ensures no duplicate round resolution.
+ *
+ * Separation of concerns:
+ * - Game handles rule evaluation.
+ * - GameSession handles state progression.
+ * - GameManager handles lifecycle registration.
+ * - LeaderboardManager handles persistence of results.
+ *
+ * The session cleans itself up on match end,
+ * including shutting down its scheduler,
+ * preventing thread leaks.
+ *
+ * This class is effectively the state machine of a match.
+ */
 public class GameSession {
 
     private final LeaderboardManager leaderboardManager;

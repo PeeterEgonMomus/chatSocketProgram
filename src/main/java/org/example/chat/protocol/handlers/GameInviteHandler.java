@@ -8,6 +8,28 @@ import org.example.chat.protocol.*;
 
 import java.io.DataInputStream;
 
+/**
+ * Design choice:
+ * Handles GAME_INVITE frames at the protocol layer.
+ *
+ * This class acts as a thin adapter between:
+ * - Binary protocol frames
+ * - Application service layer (GameService)
+ *
+ * Responsibilities:
+ * - Decode opponent username
+ * - Decode game name
+ * - Delegate invite logic to GameService
+ *
+ * It intentionally contains no validation or domain logic.
+ * All validation and error handling occurs in GameService.
+ *
+ * This maintains strict layering:
+ *
+ * Transport Layer  →  Service Layer  →  Domain Layer
+ *
+ * Prevents protocol code from leaking business logic.
+ */
 public class GameInviteHandler implements FrameHandler {
 
     private final GameService gameService;
