@@ -10,10 +10,25 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
+/**
+ * HandshakeService performs the client-side handshake protocol:
+ * - Receives server RSA public key
+ * - Sends client RSA public key
+ * - Generates AES session key
+ * - Sends AES key encrypted for server
+ * - Waits for server confirmation (HANDSHAKE_OK)
+ *
+ * Responsibilities:
+ * - Establish symmetric AES key for secure communication
+ * - Ensure handshake flow completes before ClientEncryption is active
+ *
+ * Architecture Role:
+ * - Security bootstrap for client session
+ * - Used by ConnectionManager and ClientRuntime
+ */
 public final class HandshakeService {
 
     private final ClientHandshakeCrypto crypto;
-
     private SecretKey sessionAESKey;
 
     public HandshakeService(ClientHandshakeCrypto crypto) {
@@ -21,7 +36,6 @@ public final class HandshakeService {
     }
 
     public void perform(FramedConnection connection) throws Exception {
-
         // 1️⃣ Receive server public key
         Frame serverKeyFrame = connection.receive();
         if (serverKeyFrame.getType() != FrameType.HANDSHAKE_SERVER_KEY) {
@@ -30,39 +44,28 @@ public final class HandshakeService {
             );
         }
 
-        String serverPubKey =
-                new String(serverKeyFrame.getPayload(), StandardCharsets.UTF_8);
-
+        String serverPubKey = new String(serverKeyFrame.getPayload(), StandardCharsets.UTF_8);
         crypto.setServerPublicKeyBase64(serverPubKey);
 
         // 2️⃣ Send client public key
         connection.send(new Frame(
                 FrameType.HANDSHAKE_CLIENT_KEY,
-                crypto.getClientPublicKeyBase64()
-                        .getBytes(StandardCharsets.UTF_8)
+                crypto.getClientPublicKeyBase64().getBytes(StandardCharsets.UTF_8)
         ));
 
-        // 3️⃣ Generate AES key (base64)
+        // 3️⃣ Generate AES key
         String aesKeyBase64 = crypto.generateAESKeyBase64();
-
-        // Convert to SecretKey and store locally
         byte[] decoded = Base64.getDecoder().decode(aesKeyBase64);
         sessionAESKey = new SecretKeySpec(decoded, "AES");
 
         // 4️⃣ Encrypt AES key with server RSA
         String encryptedAES = crypto.encryptAESKeyForServer(aesKeyBase64);
+        connection.send(new Frame(FrameType.HANDSHAKE_AES_KEY, encryptedAES.getBytes(StandardCharsets.UTF_8)));
 
-        connection.send(new Frame(
-                FrameType.HANDSHAKE_AES_KEY,
-                encryptedAES.getBytes(StandardCharsets.UTF_8)
-        ));
-
-        // 5️⃣ Wait for OK
+        // 5️⃣ Wait for server confirmation
         Frame ok = connection.receive();
         if (ok.getType() != FrameType.HANDSHAKE_OK) {
-            throw new IllegalStateException(
-                    "Expected HANDSHAKE_OK, got " + ok.getType()
-            );
+            throw new IllegalStateException("Expected HANDSHAKE_OK, got " + ok.getType());
         }
     }
 

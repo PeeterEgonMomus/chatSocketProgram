@@ -5,6 +5,23 @@ import org.example.chat.protocol.FrameType;
 
 import java.nio.charset.StandardCharsets;
 
+
+/**
+ * Handles incoming CHAT frames.
+ *
+ * Responsibilities:
+ * - Validate frame type
+ * - Decode payload as UTF-8 text
+ * - Output chat message to console
+ *
+ * Important:
+ * - Assumes payload is already plaintext
+ * - Does not perform authentication or parsing
+ *
+ * Design:
+ * - Single Responsibility: handle CHAT only
+ * - Fails fast if wrong FrameType is received
+ */
 public final class ChatFrameHandler implements FrameHandler {
 
     @Override

@@ -9,6 +9,29 @@ import java.util.Base64;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+/**
+ * Represents the active state of a single incoming file transfer.
+ *
+ * Responsibilities:
+ * - Manage file output stream
+ * - Compute SHA-256 checksum
+ * - Write data asynchronously via writer thread
+ * - Validate integrity upon completion
+ *
+ * Concurrency Model:
+ * - Uses BlockingQueue to decouple network thread from disk IO
+ * - Network thread enqueues data (non-blocking)
+ * - Dedicated writer thread consumes queue
+ *
+ * Safety:
+ * - Uses POISON pill pattern to signal completion
+ * - Deletes file on checksum mismatch
+ *
+ * This design prevents:
+ * - Blocking network thread
+ * - Backpressure delays
+ * - Corruption from concurrent writes
+ */
 public final class IncomingFileState {
 
     private File file;

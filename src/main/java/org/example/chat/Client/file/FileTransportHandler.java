@@ -7,6 +7,23 @@ import org.example.chat.util.Logger;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 
+/**
+ * Handles the transport phase of incoming file transfers.
+ *
+ * Supported frames:
+ * - FILE_START
+ * - FILE_CHUNK
+ * - FILE_END
+ *
+ * Responsibilities:
+ * - Route chunks to correct IncomingFileState
+ * - Ensure transfer exists
+ * - Signal completion
+ *
+ * Important:
+ * This handler NEVER blocks.
+ * It delegates IO to IncomingFileState writer thread.
+ */
 public final class FileTransportHandler implements FrameHandler {
 
     private final IncomingTransferRegistry registry;

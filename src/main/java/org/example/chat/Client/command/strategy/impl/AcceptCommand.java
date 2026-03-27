@@ -7,6 +7,25 @@ import org.example.chat.protocol.*;
 
 import java.io.*;
 
+/**
+ * Command strategy for accepting a pending file transfer.
+ *
+ * Usage:
+ *   /accept <transferId>
+ *
+ * Responsibilities:
+ * - Activate pending transfer locally
+ * - Notify server of acceptance via FILE_ACCEPT frame
+ *
+ * Flow:
+ *   1. User accepts
+ *   2. Registry activates transfer
+ *   3. Client notifies server
+ *
+ * Note:
+ * - Relies on IncomingTransferRegistry for state management
+ * - Constructs protocol frame manually
+ */
 public final class AcceptCommand implements CommandStrategy {
 
     private final IncomingTransferRegistry registry;

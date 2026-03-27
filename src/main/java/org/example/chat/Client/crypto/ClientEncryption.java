@@ -8,12 +8,28 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
-import java.util.Base64;
 
+/**
+ * ClientEncryption implements AES-GCM encryption for client-server communication
+ *
+ * Responsibilities:
+ * - AES key-based encryption/decryption
+ * - Uses FrameType as AAD to ensure integrity and type-specific authentication
+ * - Provides secure payloads to FramedChatConnection
+ *
+ * Architecture Role:
+ * - Core crypto engine for ClientRuntime
+ * - Sits under DefaultClientCipher (adapter) and above FramedChatConnection
+ * - Ensures that only after handshake, AES encryption is applied
+ *
+ * Security Notes:
+ * - GCM is used for authenticated encryption (AEAD)
+ * - IV is randomly generated per message
+ * - FrameType is used as AAD to prevent type-swapping attacks
+ */
 public class ClientEncryption implements ClientCrypto {
 
     private final SecretKey aesKey;
-
     private static final int GCM_TAG_LENGTH = 128; // bits
     private static final int GCM_IV_LENGTH = 12;   // bytes
 
@@ -25,13 +41,9 @@ public class ClientEncryption implements ClientCrypto {
         Logger.info("ClientEncryption initialized with AES session key.");
     }
 
-    // =========================
-    // Core AES + AAD Logic
-    // =========================
-
+    // Core AES encryption logic
     private byte[] encrypt(byte[] plaintext, FrameType type) throws Exception {
-        Logger.debug("AES encrypt | type=" + type +
-                " | plaintext length=" + plaintext.length);
+        Logger.debug("AES encrypt | type=" + type + " | plaintext length=" + plaintext.length);
 
         byte[] iv = new byte[GCM_IV_LENGTH];
         new SecureRandom().nextBytes(iv);
@@ -39,12 +51,12 @@ public class ClientEncryption implements ClientCrypto {
         byte[] aad = type.name().getBytes(StandardCharsets.UTF_8);
 
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
-        cipher.init(Cipher.ENCRYPT_MODE, aesKey, spec);
+        cipher.init(Cipher.ENCRYPT_MODE, aesKey, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
         cipher.updateAAD(aad);
 
         byte[] ciphertext = cipher.doFinal(plaintext);
 
+        // Combine IV + ciphertext
         byte[] combined = new byte[iv.length + ciphertext.length];
         System.arraycopy(iv, 0, combined, 0, iv.length);
         System.arraycopy(ciphertext, 0, combined, iv.length, ciphertext.length);
@@ -53,9 +65,9 @@ public class ClientEncryption implements ClientCrypto {
         return combined;
     }
 
+    // Core AES decryption logic
     private byte[] decrypt(byte[] data, FrameType type) throws Exception {
-        Logger.debug("AES decrypt | type=" + type +
-                " | total length=" + data.length);
+        Logger.debug("AES decrypt | type=" + type + " | total length=" + data.length);
 
         if (data.length < GCM_IV_LENGTH) {
             throw new IllegalArgumentException("Encrypted payload too short");
@@ -71,25 +83,18 @@ public class ClientEncryption implements ClientCrypto {
 
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            GCMParameterSpec spec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
-            cipher.init(Cipher.DECRYPT_MODE, aesKey, spec);
+            cipher.init(Cipher.DECRYPT_MODE, aesKey, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
             cipher.updateAAD(aad);
 
             byte[] plain = cipher.doFinal(ciphertext);
-
             Logger.debug("AES decrypt | plaintext length=" + plain.length);
             return plain;
 
         } catch (javax.crypto.AEADBadTagException e) {
-            Logger.error("❌ AES/GCM authentication failed! " +
-                    "Possible key mismatch or wrong FrameType.", e);
+            Logger.error("❌ AES/GCM authentication failed! Possible key mismatch or wrong FrameType.", e);
             throw e;
         }
     }
-
-    // =========================
-    // Public API
-    // =========================
 
     @Override
     public byte[] encryptBytesForServer(byte[] payload, FrameType type) throws Exception {
@@ -105,5 +110,4 @@ public class ClientEncryption implements ClientCrypto {
     public boolean isAESReady() {
         return aesKey != null;
     }
-
 }

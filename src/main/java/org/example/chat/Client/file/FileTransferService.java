@@ -13,6 +13,39 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Handles the complete lifecycle of outgoing file transfers.
+ *
+ * Responsibilities:
+ * - Prepare files for sending
+ * - Initiate transfer negotiation
+ * - Stream file data in chunks
+ * - Handle server-controlled upload start
+ *
+ * Protocol Phases:
+ *
+ * 1. Sender:
+ *    SEND_FILE_REQUEST
+ *    FILE_OFFER
+ *
+ * 2. Server:
+ *    SEND_FILE_READY
+ *
+ * 3. Sender:
+ *    FILE_START
+ *    FILE_CHUNK (multiple)
+ *    FILE_END
+ *
+ * Concurrency:
+ * - Uses ConcurrentHashMap for active transfers
+ *
+ * Integrity:
+ * - SHA-256 checksum verification (receiver side)
+ *
+ * Design:
+ * - Server controls upload start
+ * - FILE_ACCEPT does NOT directly trigger streaming
+ */
 public final class FileTransferService {
 
     private final FramedChatConnection connection;

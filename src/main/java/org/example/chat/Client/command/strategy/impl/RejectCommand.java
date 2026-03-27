@@ -8,6 +8,19 @@ import org.example.chat.protocol.FrameType;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 
+/**
+ * Command strategy for rejecting a file transfer.
+ *
+ * Usage:
+ *   /reject <transferId>
+ *
+ * Responsibilities:
+ * - Send FILE_REJECT frame to server
+ *
+ * Design:
+ * - Does not manage registry state
+ * - Server remains source of truth
+ */
 public final class RejectCommand implements CommandStrategy {
 
     private final FramedChatConnection connection;

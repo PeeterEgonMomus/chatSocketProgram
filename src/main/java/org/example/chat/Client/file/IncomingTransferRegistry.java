@@ -3,6 +3,22 @@ package org.example.chat.Client.file;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Registry managing incoming file transfers.
+ *
+ * Maintains two states:
+ *
+ * 1. Pending Offers (awaiting user decision)
+ * 2. Active Transfers (currently streaming)
+ *
+ * Responsibilities:
+ * - Store incoming offers
+ * - Activate transfer upon acceptance
+ * - Provide lookup for transport handler
+ * - Remove completed transfers
+ *
+ * Thread-safe via ConcurrentHashMap.
+ */
 public final class IncomingTransferRegistry {
 
     private final Map<String, IncomingFileState> activeTransfers =

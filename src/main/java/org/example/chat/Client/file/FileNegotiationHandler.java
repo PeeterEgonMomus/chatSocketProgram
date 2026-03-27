@@ -11,6 +11,23 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 
+/**
+ * Handles FILE_OFFER frames (incoming file offers).
+ *
+ * This is the FIRST stage of receiving a file.
+ *
+ * Responsibilities:
+ * - Parse incoming offer metadata
+ * - Inform user about incoming file
+ * - Store offer as PENDING (not yet active)
+ *
+ * Important:
+ * - No file writing happens here.
+ * - Transfer only becomes active after FILE_ACCEPT.
+ *
+ * Design:
+ * Keeps negotiation phase separate from transport phase.
+ */
 public final class FileNegotiationHandler implements FrameHandler {
 
     private final IncomingTransferRegistry registry;

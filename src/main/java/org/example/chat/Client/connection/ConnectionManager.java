@@ -5,6 +5,47 @@ import org.example.chat.Client.protocol.HandshakeService;
 import javax.crypto.SecretKey;
 import java.net.Socket;
 
+/**
+ * Client Connection Orchestrator.
+ *
+ * Responsibility:
+ * - Establish TCP connection
+ * - Perform handshake
+ * - Provide configured FramedChatConnection
+ *
+ * Architecture Role:
+ * This is part of the Client Bootstrap / Infrastructure Layer.
+ *
+ * It coordinates:
+ *      • Socket creation
+ *      • Handshake negotiation
+ *      • Initial connection lifecycle
+ *
+ * Important Design Decision:
+ * - Handshake is performed in plaintext mode.
+ * - Cipher is NOT installed here.
+ *
+ * Why?
+ * Because:
+ * - AES session key must first be negotiated.
+ * - ClientRuntime installs the cipher afterwards.
+ *
+ * This keeps:
+ * - Transport setup
+ * - Crypto activation
+ * - Runtime wiring
+ *
+ * Cleanly separated.
+ *
+ * Design Pattern:
+ * - Orchestrator
+ * - Infrastructure coordinator
+ *
+ * This class does NOT:
+ * - Process frames
+ * - Handle user input
+ * - Manage runtime loop
+ */
 public final class ConnectionManager implements AutoCloseable {
 
     private final String host;
@@ -24,30 +65,44 @@ public final class ConnectionManager implements AutoCloseable {
         this.handshakeService = handshakeService;
     }
 
+    /**
+     * Establishes TCP connection and performs handshake.
+     *
+     * Flow:
+     * 1. Open socket
+     * 2. Create FramedChatConnection (plaintext)
+     * 3. Perform RSA/AES handshake
+     * 4. Return connection
+     *
+     * Cipher installation happens later in ClientRuntime.
+     */
     public FramedChatConnection connect() throws Exception {
         socket = new Socket(host, port);
         framedConnection = new FramedChatConnection(socket);
 
-        // Perform plaintext handshake only
+        // Plaintext handshake
         handshakeService.perform(framedConnection);
-
-        // ⚠️ DO NOT install cipher here
-        // Cipher will be installed by ClientRuntime after AES is negotiated
 
         return framedConnection;
     }
 
     /**
-     * Returns the AES session key from handshake
+     * Returns negotiated AES session key.
+     *
+     * Used by ClientRuntime to install cipher.
      */
     public SecretKey getSessionAESKey() {
         return handshakeService.getSessionAESKey();
     }
 
+    /**
+     * Gracefully closes connection.
+     */
     @Override
     public void close() {
         try {
-            if (framedConnection != null) framedConnection.close();
+            if (framedConnection != null)
+                framedConnection.close();
         } catch (Exception ignored) {}
     }
 }

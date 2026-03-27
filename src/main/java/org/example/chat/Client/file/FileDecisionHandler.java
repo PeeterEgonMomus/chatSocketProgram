@@ -8,6 +8,20 @@ import org.example.chat.util.Logger;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 
+/**
+ * Handles FILE_ACCEPT and FILE_REJECT frames.
+ *
+ * This handler is part of the negotiation lifecycle.
+ *
+ * Responsibilities:
+ * - React to recipient decision
+ * - Activate pending transfers on accept
+ * - Remove pending transfers on reject
+ *
+ * Important:
+ * This handler does NOT perform any file IO.
+ * It only coordinates registry state.
+ */
 public final class FileDecisionHandler implements FrameHandler {
 
     private final IncomingTransferRegistry registry;

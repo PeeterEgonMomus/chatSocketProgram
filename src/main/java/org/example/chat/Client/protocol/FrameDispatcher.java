@@ -9,13 +9,23 @@ import org.example.chat.util.Logger;
 import java.util.EnumMap;
 import java.util.Map;
 
+/**
+ * FrameDispatcher routes incoming frames to their respective handlers.
+ *
+ * Responsibilities:
+ * - Maintain mapping of FrameType → FrameHandler
+ * - Dispatch frames to correct handler
+ * - Support start/stop lifecycle for ClientRuntime
+ *
+ * Architecture Role:
+ * - Central event dispatch for all client-side frame handling
+ * - Allows modular extension of new frame types (e.g., chat, file transfer)
+ */
 public final class FrameDispatcher {
 
     private final Map<FrameType, FrameHandler> handlers = new EnumMap<>(FrameType.class);
     private boolean sealed = false;
 
-
-    // Register a handler for a frame type
     public void register(FrameType type, FrameHandler handler) {
         if (sealed) {
             throw new IllegalStateException("Dispatcher already sealed");
@@ -23,8 +33,6 @@ public final class FrameDispatcher {
         handlers.put(type, handler);
     }
 
-
-    // Dispatch a frame to its handler
     public void dispatch(Frame frame) throws Exception {
         FrameHandler handler = handlers.get(frame.getType());
         if (handler == null) {
@@ -34,12 +42,10 @@ public final class FrameDispatcher {
         handler.handle(frame);
     }
 
-    // Minimal start method to satisfy ClientRuntime
     public void start(FramedChatConnection connection) {
-        // no-op for now
+        // no-op for now; frame reader drives dispatching
     }
 
-    // Minimal stop method to satisfy ClientRuntime
     public void stop() {
         // no-op for now
     }

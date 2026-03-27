@@ -9,6 +9,26 @@ import java.security.*;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
+/**
+ * ClientHandshakeCipher handles RSA keypair and AES key encryption
+ * during the handshake phase with the server.
+ *
+ * Responsibilities:
+ * - Generate client RSA keypair
+ * - Store server RSA public key
+ * - Generate AES session key for symmetric encryption
+ * - Encrypt AES key using server public key
+ *
+ * Architecture Role:
+ * - Handshake layer between client and server
+ * - Establishes secure symmetric session key
+ * - Precedes full ClientEncryption/AES usage
+ *
+ * Security Notes:
+ * - RSA 2048-bit keys
+ * - AES 256-bit session key
+ * - AES key transmitted only after RSA encryption
+ */
 public class ClientHandshakeCipher implements ClientHandshakeCrypto {
 
     private PublicKey serverPublicKey;
@@ -32,9 +52,7 @@ public class ClientHandshakeCipher implements ClientHandshakeCrypto {
 
     @Override
     public String getClientPublicKeyBase64() {
-        return Base64.getEncoder().encodeToString(
-                clientKeyPair.getPublic().getEncoded()
-        );
+        return Base64.getEncoder().encodeToString(clientKeyPair.getPublic().getEncoded());
     }
 
     @Override
@@ -51,14 +69,10 @@ public class ClientHandshakeCipher implements ClientHandshakeCrypto {
         if (serverPublicKey == null) {
             throw new IllegalStateException("Server public key not set");
         }
-
         Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
         cipher.init(Cipher.ENCRYPT_MODE, serverPublicKey);
 
-        byte[] encrypted = cipher.doFinal(
-                Base64.getDecoder().decode(aesKeyBase64)
-        );
-
+        byte[] encrypted = cipher.doFinal(Base64.getDecoder().decode(aesKeyBase64));
         return Base64.getEncoder().encodeToString(encrypted);
     }
 }
