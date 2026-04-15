@@ -50,4 +50,10 @@ public class InMemoryUserStore implements UserStore {
     public Optional<User> getUser(String username) {
         return Optional.ofNullable(users.get(username));
     }
+
+    @Override
+    public void updatePassword(String username, String newEncodedPassword) {
+        users.computeIfPresent(username,
+                (u, oldUser) -> new User(username, newEncodedPassword));
+    }
 }

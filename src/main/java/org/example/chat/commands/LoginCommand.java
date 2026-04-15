@@ -21,10 +21,14 @@ public class LoginCommand implements Command {
 
     private final UserStore userStore;
     private final UserSessionManager sessionManager;
+    private final PasswordEncoder passwordEncoder;
 
-    public LoginCommand(UserStore userStore, UserSessionManager sessionManager) {
+    public LoginCommand(UserStore userStore,
+                        UserSessionManager sessionManager,
+                        PasswordEncoder passwordEncoder) {
         this.userStore = userStore;
         this.sessionManager = sessionManager;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -45,24 +49,18 @@ public class LoginCommand implements Command {
 
         userStore.getUser(username).ifPresentOrElse(user -> {
 
-            if (PasswordHasher.verify(password, user.getSalt(), user.getPasswordHash())) {
+            if (passwordEncoder.verify(password, user.getEncodedPassword())) {
 
-                /**
-                 * Design choice:
-                 * ClientHandler stores minimal session identity,
-                 * while SessionManager owns global session state.
-                 */
                 client.setUsername(username);
-
                 client.send("Login successful! Welcome " + username);
 
-                /**
-                 * Design choice:
-                 * Centralized session tracking enables:
-                 * - presence features
-                 * - multi-client management
-                 */
                 sessionManager.registerSession(username, client);
+
+                // Optional progressive rehash
+                if (passwordEncoder.needsRehash(user.getEncodedPassword())) {
+                    String upgraded = passwordEncoder.encode(password);
+                    userStore.updatePassword(username, upgraded);
+                }
 
             } else {
                 client.send("Invalid password.");

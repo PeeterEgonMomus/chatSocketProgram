@@ -4,39 +4,27 @@ package org.example.chat.auth;
  * Immutable domain model representing a registered user.
  *
  * Important:
- * - Stores hashed password, NOT plaintext password.
- * - Stores salt used for hashing.
+ * - Stores encoded password (contains algorithm + salt + hash).
+ * - Never stores plaintext password.
  *
- * Security principle:
- * - Never store plaintext passwords.
- * - Always combine password + unique salt before hashing.
- *
- * Design:
- * - Immutable (final fields)
- * - Thread-safe
- * - No business logic (pure data holder)
+ * The encodedPassword format:
+ * pbkdf2$iterations$keyLength$salt$hash
  */
 public class User {
 
     private final String username;
-    private final String passwordHash;
-    private final String salt;
+    private final String encodedPassword;
 
-    public User(String username, String passwordHash, String salt) {
+    public User(String username, String encodedPassword) {
         this.username = username;
-        this.passwordHash = passwordHash;
-        this.salt = salt;
+        this.encodedPassword = encodedPassword;
     }
 
     public String getUsername() {
         return username;
     }
 
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public String getSalt() {
-        return salt;
+    public String getEncodedPassword() {
+        return encodedPassword;
     }
 }

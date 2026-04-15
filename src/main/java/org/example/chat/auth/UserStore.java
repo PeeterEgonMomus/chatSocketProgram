@@ -37,4 +37,6 @@ public interface UserStore {
      * @return Optional containing the user if found
      */
     Optional<User> getUser(String username);
+
+    void updatePassword(String username, String newEncodedPassword);
 }

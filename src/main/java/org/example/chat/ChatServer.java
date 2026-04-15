@@ -107,6 +107,8 @@ public class ChatServer {
     private final GameManager gameManager = new GameManager(leaderboardManager);
     private final GameRegistry gameRegistry = new GameRegistry();
 
+    private final PasswordEncoder passwordEncoder;
+
     // ✅ SINGLE ENTRY POINT FOR ALL GAME LOGIC
     private final GameService gameService;
 
@@ -120,6 +122,10 @@ public class ChatServer {
 
         this.fileTransferManager = new FileTransferManager(transferExecutor);
         this.fileTransfers = new ServerFileTransferService(fileTransferManager);
+
+        this.passwordEncoder =
+                new Pbkdf2PasswordEncoder(600_000, 256);
+        // 600k iterations, 256-bit key
 
         // ✅ Build service AFTER dependencies
         this.gameService = new GameService(gameManager, gameRegistry, leaderboardManager);
@@ -140,8 +146,8 @@ public class ChatServer {
                 .addRule(new MinLengthRule(8))
                 .addRule(new MustContainNumberRule());
 
-        registry.register(new RegisterCommand(userStore, passwordRule));
-        registry.register(new LoginCommand(userStore, sessionManager));
+        registry.register(new RegisterCommand(userStore, passwordRule, passwordEncoder));
+        registry.register(new LoginCommand(userStore, sessionManager, passwordEncoder));
     }
 
     // =========================

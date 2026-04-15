@@ -20,6 +20,7 @@ public class RegisterCommand implements Command {
 
     private final UserStore userStore;
     private final PasswordRule passwordRule;
+    private final PasswordEncoder passwordEncoder;
 
     /**
      * Design choice:
@@ -29,9 +30,12 @@ public class RegisterCommand implements Command {
      * - flexible policy configuration
      * - easier testing
      */
-    public RegisterCommand(UserStore userStore, PasswordRule passwordRule) {
+    public RegisterCommand(UserStore userStore,
+                           PasswordRule passwordRule,
+                           PasswordEncoder passwordEncoder) {
         this.userStore = userStore;
         this.passwordRule = passwordRule;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -62,10 +66,11 @@ public class RegisterCommand implements Command {
             return;
         }
 
-        String salt = PasswordHasher.generateSalt();
-        String hash = PasswordHasher.hash(password, salt);
+        String encodedPassword = passwordEncoder.encode(password);
 
-        boolean success = userStore.addUser(new User(username, hash, salt));
+        boolean success = userStore.addUser(
+                new User(username, encodedPassword)
+        );
 
         client.send(success
                 ? "Registration successful!"
