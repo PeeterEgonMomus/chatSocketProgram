@@ -9,18 +9,15 @@ import org.example.chat.protocol.FrameEncoder;
 import org.example.chat.protocol.FrameType;
 import org.example.chat.security.EncryptionService;
 import org.example.chat.util.Logger;
+import org.example.chat.auth.UserSessionManager;
 
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import org.example.chat.auth.UserSessionManager;
 
 /**
- * Design choice:
- * Represents a single connected client.
- *
- * ClientHandler is the per-connection runtime container.
+ * ClientHandler represents a single connected client.
  *
  * Responsibilities:
  * - Own the client socket
@@ -30,57 +27,13 @@ import org.example.chat.auth.UserSessionManager;
  * - Send encrypted responses
  * - Manage client session state
  *
- * ---------------------------------------------------------
- * Architectural Role
- * ---------------------------------------------------------
+ * Concurrency:
+ * - One thread per client
+ * - sendLock prevents frame interleaving
  *
- * ClientHandler sits between:
- *
- *   Network (Socket)
- *   ↓
- *   FrameDecoder / Encoder
- *   ↓
- *   FrameRouter
- *   ↓
- *   Services / Domain
- *
- * It acts as:
- * - Transport adapter
- * - Encryption boundary
- * - Session entry point
- *
- * ---------------------------------------------------------
- * Important Design Decisions:
- * ---------------------------------------------------------
- *
- * 1) Encryption is delegated to EncryptionService.
- *    ClientHandler never implements cryptography itself.
- *
- * 2) Frame routing is delegated to FrameRouter.
- *    ClientHandler does not interpret frame meaning.
- *
- * 3) Session registration occurs only after authentication.
- *
- * 4) sendLock ensures thread-safe writes to the socket.
- *
- * ---------------------------------------------------------
- * Concurrency Model:
- * ---------------------------------------------------------
- *
- * Each ClientHandler runs in its own thread.
- * Sending is synchronized to avoid frame interleaving.
- *
- * ---------------------------------------------------------
- * Cleanup Guarantees:
- * ---------------------------------------------------------
- *
- * On disconnect:
- * - Socket closes
- * - Encryption keys removed
- * - Session removed
- * - File transfers aborted
- *
- * This prevents memory leaks and dangling state.
+ * Cleanup:
+ * - Idempotent
+ * - Safe against double invocation
  */
 public class ClientHandler implements Runnable, FileTransferPeer {
 
@@ -88,20 +41,23 @@ public class ClientHandler implements Runnable, FileTransferPeer {
     private final ChatServer server;
     private final EncryptionService encryptionService;
     private final FrameRouter router;
+    private final HandshakeService handshakeService;
 
     private InputStream rawIn;
     private OutputStream rawOut;
 
-    private String username;
+    private volatile boolean closed = false;
+    private volatile boolean handshakeComplete = false;
 
-    private final HandshakeService handshakeService;
+    private String username;
 
     private final Object sendLock = new Object();
 
     public ClientHandler(Socket socket,
                          ChatServer server,
                          EncryptionService encryptionService,
-                         FrameRouter router, HandshakeService handshakeService) {
+                         FrameRouter router,
+                         HandshakeService handshakeService) {
         this.socket = socket;
         this.server = server;
         this.encryptionService = encryptionService;
@@ -120,9 +76,13 @@ public class ClientHandler implements Runnable, FileTransferPeer {
             rawOut = socket.getOutputStream();
 
             handshakeService.performHandshake(this);
+            handshakeComplete = true;
 
             Frame frame;
-            while ((frame = readFrame()) != null) {
+            while (!Thread.currentThread().isInterrupted()
+                    && !socket.isClosed()
+                    && (frame = readFrame()) != null) {
+
                 try {
                     router.route(this, frame);
                 } catch (Exception e) {
@@ -133,12 +93,19 @@ public class ClientHandler implements Runnable, FileTransferPeer {
         } catch (Exception e) {
             Logger.error("Client error", e);
         } finally {
-            try { socket.close(); } catch (Exception ignored) {}
-
-            encryptionService.removeClient(this);
-            server.removeClient(this);
-            server.getFileTransferManager().abortTransfersForPeer(this);
+            cleanup();
         }
+    }
+
+    private void cleanup() {
+        if (closed) return;
+        closed = true;
+
+        try { socket.close(); } catch (Exception ignored) {}
+
+        encryptionService.removeClient(this);
+        server.removeClient(this);
+        server.getFileTransferManager().abortTransfersForPeer(this);
     }
 
     /* =========================================================
@@ -148,12 +115,6 @@ public class ClientHandler implements Runnable, FileTransferPeer {
     public Frame readFrame() throws Exception {
         return FrameDecoder.read(rawIn);
     }
-
-    /* =========================================================
-     * Handshake
-     * ========================================================= */
-
-
 
     /* =========================================================
      * Messaging
@@ -167,11 +128,16 @@ public class ClientHandler implements Runnable, FileTransferPeer {
             );
         } catch (Exception e) {
             Logger.error("Send failed", e);
+            cleanup();
         }
     }
 
     @Override
     public void sendEncrypted(FrameType type, byte[] payload) throws Exception {
+
+        if (!handshakeComplete) {
+            throw new IllegalStateException("Handshake not completed");
+        }
 
         byte[] encrypted = encryptionService.encryptBytesForClient(
                 this,
@@ -188,6 +154,7 @@ public class ClientHandler implements Runnable, FileTransferPeer {
                 FrameEncoder.write(frame, rawOut);
             } catch (Exception e) {
                 Logger.error("Failed to send frame", e);
+                cleanup();
             }
         }
     }
@@ -221,6 +188,10 @@ public class ClientHandler implements Runnable, FileTransferPeer {
      * ========================================================= */
 
     public void setUsername(String username) {
+        if (this.username != null) {
+            throw new IllegalStateException("Username already set");
+        }
+
         this.username = username;
         server.getSessionManager().registerSession(username, this);
     }
@@ -263,6 +234,8 @@ public class ClientHandler implements Runnable, FileTransferPeer {
 
     @Override
     public String toString() {
-        return username != null ? username : socket.toString();
+        return username != null
+                ? "Client[" + username + "]"
+                : "Client[" + socket.getRemoteSocketAddress() + "]";
     }
 }
