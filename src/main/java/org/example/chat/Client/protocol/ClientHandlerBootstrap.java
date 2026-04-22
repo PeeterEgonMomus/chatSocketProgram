@@ -5,6 +5,7 @@ import org.example.chat.Client.file.*;
 import org.example.chat.Client.handler.ChatFrameHandler;
 import org.example.chat.protocol.FrameType;
 import org.example.chat.util.Logger;
+import org.example.chat.Client.handler.PingFrameHandler;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -39,10 +40,12 @@ public final class ClientHandlerBootstrap {
         FileTransportHandler transportHandler = new FileTransportHandler(registry);
         FileNegotiationHandler negotiationHandler = new FileNegotiationHandler(registry, connection);
 
+
         dispatcher.register(FILE_OFFER, negotiationHandler);
         dispatcher.register(FILE_START, transportHandler);
         dispatcher.register(FILE_CHUNK, transportHandler);
         dispatcher.register(FILE_END, transportHandler);
+
 
         // FILE_ACCEPT
         dispatcher.register(FILE_ACCEPT, frame -> {
@@ -74,6 +77,9 @@ public final class ClientHandlerBootstrap {
             String transferId = in.readUTF();
             transferService.onSendFileReady(transferId);
         });
+
+        dispatcher.register(FrameType.PING,
+                new PingFrameHandler(connection));
 
         // ERROR frame
         dispatcher.register(FrameType.ERROR, frame -> {

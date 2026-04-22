@@ -3,6 +3,7 @@ package org.example.chat;
 import org.example.chat.protocol.Frame;
 import org.example.chat.protocol.FrameContext;
 import org.example.chat.protocol.FrameType;
+import org.example.chat.security.EncryptionService;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -80,8 +81,16 @@ import java.util.Map;
 public class FrameRouter {
 
     private final Map<FrameType, FrameHandler> handlers = new HashMap<>();
+    private final EncryptionService encryptionService;
+
+    public FrameRouter(EncryptionService encryptionService) {
+        this.encryptionService = encryptionService;
+    }
 
     public void register(FrameHandler handler) {
+        if (handlers.containsKey(handler.type())) {
+            throw new IllegalStateException("Duplicate handler for " + handler.type());
+        }
         handlers.put(handler.type(), handler);
     }
 
@@ -107,7 +116,8 @@ public class FrameRouter {
         if (handler == null)
             throw new IllegalStateException("No handler for " + frame.getType());
 
-        FrameContext ctx = new FrameContext(client, frame);
+        FrameContext ctx =
+                new FrameContext(client, frame, encryptionService);
 
         handler.handle(ctx);
     }

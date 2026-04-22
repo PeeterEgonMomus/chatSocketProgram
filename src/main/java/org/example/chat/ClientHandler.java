@@ -53,6 +53,8 @@ public class ClientHandler implements Runnable, FileTransferPeer {
 
     private final Object sendLock = new Object();
 
+    private volatile long lastHeartbeat = System.currentTimeMillis();
+
     public ClientHandler(Socket socket,
                          ChatServer server,
                          EncryptionService encryptionService,
@@ -77,6 +79,8 @@ public class ClientHandler implements Runnable, FileTransferPeer {
 
             handshakeService.performHandshake(this);
             handshakeComplete = true;
+
+            updateHeartbeat();
 
             Frame frame;
             while (!Thread.currentThread().isInterrupted()
@@ -208,10 +212,6 @@ public class ClientHandler implements Runnable, FileTransferPeer {
      * Server Access Helpers
      * ========================================================= */
 
-    public EncryptionService encryption() {
-        return encryptionService;
-    }
-
     public FileTransferManager fileTransfers() {
         return server.getFileTransferManager();
     }
@@ -226,6 +226,14 @@ public class ClientHandler implements Runnable, FileTransferPeer {
 
     public Socket getSocket() {
         return socket;
+    }
+
+    public void updateHeartbeat() {
+        lastHeartbeat = System.currentTimeMillis();
+    }
+
+    public long getLastHeartbeat() {
+        return lastHeartbeat;
     }
 
     /* =========================================================

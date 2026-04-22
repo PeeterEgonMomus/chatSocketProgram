@@ -1,31 +1,8 @@
 package org.example.chat.protocol;
 
-/**
- * Design choice:
- * Enumerates all valid protocol frame types.
- *
- * Each FrameType has a unique byte identifier
- * used for network transmission.
- *
- * Why enum?
- * - Type safety
- * - Centralized protocol definition
- * - Prevents magic numbers
- *
- * Architectural Importance:
- * This enum defines the entire wire protocol contract.
- *
- * Adding a new feature requires:
- * - Adding a new FrameType
- * - Implementing a handler
- * - Registering it in FrameRouter
- *
- * This makes protocol evolution explicit and controlled.
- *
- * fromId(byte):
- * Provides reverse lookup from network value
- * to strongly-typed enum.
- */
+import java.util.HashMap;
+import java.util.Map;
+
 public enum FrameType {
     HANDSHAKE_SERVER_KEY(10),
     HANDSHAKE_CLIENT_KEY(11),
@@ -37,31 +14,38 @@ public enum FrameType {
     FILE_ACCEPT(5),
     FILE_REJECT(7),
 
-    // FILE NEGOTIATION
-    FILE_OFFER(20),     // server → recipient
-    FILE_OFFER_REPLY(21), // recipient → server
+    FILE_OFFER(20),
+    FILE_OFFER_REPLY(21),
 
-    // FILE TRANSPORT
-    FILE_START(22),     // server → recipient
+    FILE_START(22),
     FILE_CHUNK(3),
     FILE_END(4),
 
-    // FILE NEGOTIATION (NEW)
-    SEND_FILE_REQUEST(30),   // sender → server (routing request)
-    SEND_FILE_READY(31),     // server → sender (recipient validated)
+    SEND_FILE_REQUEST(30),
+    SEND_FILE_READY(31),
 
-    // GAME SYSTEM
     GAME_INVITE(40),
     GAME_ACCEPT(41),
     GAME_DECLINE(42),
     GAME_MOVE(43),
     GAME_CANCEL(44),
 
+    PING(50),
+    PONG(51),
 
     ERROR(6);
 
-
     private final byte id;
+
+    private static final Map<Byte, FrameType> BY_ID = new HashMap<>();
+
+    static {
+        for (FrameType type : values()) {
+            if (BY_ID.put(type.id, type) != null) {
+                throw new IllegalStateException("Duplicate FrameType id: " + type.id);
+            }
+        }
+    }
 
     FrameType(int id) {
         this.id = (byte) id;
@@ -72,10 +56,10 @@ public enum FrameType {
     }
 
     public static FrameType fromId(byte id) {
-        for (FrameType t : values()) {
-            if (t.id == id) return t;
+        FrameType type = BY_ID.get(id);
+        if (type == null) {
+            throw new IllegalArgumentException("Unknown frame type id: " + id);
         }
-        throw new IllegalArgumentException("Unknown frame type id: " + id);
+        return type;
     }
 }
-

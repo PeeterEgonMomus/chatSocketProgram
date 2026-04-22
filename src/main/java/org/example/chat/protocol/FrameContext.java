@@ -62,21 +62,23 @@ public class FrameContext {
 
     private final ClientHandler client;
     private final Frame frame;
+    private final EncryptionService encryption;
 
     private byte[] decrypted;
     private DataInputStream input;
 
-    public FrameContext(ClientHandler client, Frame frame) {
+    public FrameContext(
+            ClientHandler client,
+            Frame frame,
+            EncryptionService encryption
+    ) {
         this.client = client;
         this.frame = frame;
+        this.encryption = encryption;
     }
 
     public ClientHandler client() {
         return client;
-    }
-
-    public ChatServer server() {
-        return client.getServer();
     }
 
     public Frame frame() {
@@ -94,9 +96,6 @@ public class FrameContext {
     public byte[] payload() throws Exception {
 
         if (decrypted == null) {
-
-            EncryptionService encryption =
-                    server().getEncryptionService();
 
             decrypted =
                     encryption.decryptBytesFromClient(

@@ -1,5 +1,6 @@
 package org.example.chat.protocol.handlers;
 
+import org.example.chat.CommandRegistry;
 import org.example.chat.FrameHandler;
 import org.example.chat.protocol.FrameContext;
 import org.example.chat.protocol.FrameType;
@@ -29,6 +30,12 @@ import java.nio.charset.StandardCharsets;
  */
 public class ChatFrameHandler implements FrameHandler {
 
+    private final CommandRegistry registry;
+
+    public ChatFrameHandler(CommandRegistry registry) {
+        this.registry = registry;
+    }
+
     /**
      * Declares which frame type this handler is responsible for.
      *
@@ -48,8 +55,6 @@ public class ChatFrameHandler implements FrameHandler {
 
         String message = new String(ctx.payload(), StandardCharsets.UTF_8);
 
-        ctx.server()
-                .getRegistry()
-                .executeCommand(ctx.client(), message);
+        registry.executeCommand(ctx.client(), message);
     }
 }

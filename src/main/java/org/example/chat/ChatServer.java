@@ -9,6 +9,7 @@ import org.example.chat.games.*;
 import org.example.chat.games.commands.*;
 import org.example.chat.handshake.HandshakeService;
 import org.example.chat.handshake.RSAHandshakeService;
+import org.example.chat.heartbeat.HeartbeatMonitor;
 import org.example.chat.protocol.handlers.*;
 import org.example.chat.security.EncryptionService;
 import org.example.chat.security.HybridEncryption;
@@ -21,6 +22,7 @@ import java.net.Socket;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 
 /**
@@ -100,8 +102,8 @@ public class ChatServer {
     private final FileTransferManager fileTransferManager;
     private final ServerFileTransferService fileTransfers;
 
-    private final FrameRouter router = new FrameRouter();
-    private final HandshakeService handshakeService = new RSAHandshakeService();
+    private final FrameRouter router;
+    private final HandshakeService handshakeService;
 
     private final LeaderboardManager leaderboardManager = new LeaderboardManager();
     private final GameManager gameManager = new GameManager(leaderboardManager);
@@ -117,11 +119,21 @@ public class ChatServer {
 
     private final ExecutorService transferExecutor = Executors.newFixedThreadPool(8);
 
+    // =========================
+    // ❤️ HEARTBEAT
+    // =========================
+
+    private final ScheduledExecutorService heartbeatScheduler =
+            Executors.newSingleThreadScheduledExecutor();
+
+    private final HeartbeatMonitor heartbeatMonitor;
+
     public ChatServer(EncryptionService encryptionService) {
         this.encryptionService = encryptionService;
-
+        this.handshakeService = new RSAHandshakeService(encryptionService);
         this.fileTransferManager = new FileTransferManager(transferExecutor);
         this.fileTransfers = new ServerFileTransferService(fileTransferManager);
+        this.router = new FrameRouter(encryptionService);
 
         this.passwordEncoder =
                 new Pbkdf2PasswordEncoder(600_000, 256);
@@ -134,6 +146,17 @@ public class ChatServer {
         registerGames();
         registerCommands();
         registerFrameHandlers();
+
+        // =========================
+        // ❤️ HEARTBEAT MONITOR
+        // =========================
+
+        this.heartbeatMonitor = new HeartbeatMonitor(
+                this,
+                heartbeatScheduler,
+                10_000,  // send PING every 10 seconds
+                30_000   // disconnect if no heartbeat for 30 seconds
+        );
     }
 
     // =========================
@@ -196,7 +219,7 @@ public class ChatServer {
 
     private void registerFrameHandlers() {
 
-        router.register(new ChatFrameHandler());
+        router.register(new ChatFrameHandler(registry));
 
         // File transfer
         router.register(new SendFileRequestHandler(fileTransfers));
@@ -206,6 +229,9 @@ public class ChatServer {
         router.register(new FileEndHandler(fileTransfers));
         router.register(new FileAcceptHandler(fileTransfers));
         router.register(new FileRejectHandler(fileTransfers));
+
+        router.register(new HeartbeatFrameHandler());
+        router.register(new PongFrameHandler());
 
         // =========================
         // 🎮 GAME FRAME HANDLERS
@@ -228,6 +254,9 @@ public class ChatServer {
 
             Logger.info("Chat server started on port " + port);
 
+
+            heartbeatMonitor.start();
+
             while (true) {
                 Socket socket = serverSocket.accept();
 
@@ -244,6 +273,7 @@ public class ChatServer {
 
     public void shutdown() {
         transferExecutor.shutdown();
+        heartbeatScheduler.shutdown();
     }
 
     // =========================
