@@ -38,7 +38,7 @@ import java.util.Base64;
  * - Logs encryption/decryption operations
  * - Logs failure scenarios
  */
-public class RSAEncryption implements EncryptionStrategy {
+public class RSAEncryption implements AsymmetricEncryption {
     private final KeyPair keyPair;
 
     public RSAEncryption() {
@@ -51,39 +51,6 @@ public class RSAEncryption implements EncryptionStrategy {
         } catch (Exception e) {
             Logger.error("Failed to initialize RSA", e);
             throw new RuntimeException("Failed to initialize RSA", e);
-        }
-    }
-
-    @Override
-    public String decrypt(String cipherText) {
-        try {
-            Logger.debug("Decrypting RSA message (Base64 length=" + cipherText.length() + ")");
-            Cipher cipher = Cipher.getInstance("RSA");
-            cipher.init(Cipher.DECRYPT_MODE, keyPair.getPrivate());
-            byte[] decoded = Base64.getDecoder().decode(cipherText);
-            byte[] decrypted = cipher.doFinal(decoded);
-            String plain = new String(decrypted);
-            Logger.debug("RSA decrypt successful (plain length=" + plain.length() + ")");
-            return plain;
-        } catch (Exception e) {
-            Logger.error("RSA decryption failed", e);
-            throw new RuntimeException("RSA decryption failed", e);
-        }
-    }
-
-    @Override
-    public String encrypt(String plainText) {
-        try {
-            Logger.debug("Encrypting with RSA public key...");
-            Cipher cipher = Cipher.getInstance("RSA");
-            cipher.init(Cipher.ENCRYPT_MODE, keyPair.getPublic());
-            byte[] encrypted = cipher.doFinal(plainText.getBytes());
-            String out = Base64.getEncoder().encodeToString(encrypted);
-            Logger.debug("RSA encryption done (output length=" + out.length() + ")");
-            return out;
-        } catch (Exception e) {
-            Logger.error("RSA encryption failed", e);
-            throw new RuntimeException("RSA encryption failed", e);
         }
     }
 
@@ -126,5 +93,27 @@ public class RSAEncryption implements EncryptionStrategy {
         String pub = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
         Logger.debug("RSA public key exported (Base64 length=" + pub.length() + ")");
         return pub;
+    }
+
+    @Override
+    public byte[] encrypt(byte[] plainText) {
+        try {
+            Cipher cipher = Cipher.getInstance("RSA");
+            cipher.init(Cipher.ENCRYPT_MODE, keyPair.getPublic());
+            return cipher.doFinal(plainText);
+        } catch (Exception e) {
+            throw new RuntimeException("RSA encryption failed", e);
+        }
+    }
+
+    @Override
+    public byte[] decrypt(byte[] cipherText) {
+        try {
+            Cipher cipher = Cipher.getInstance("RSA");
+            cipher.init(Cipher.DECRYPT_MODE, keyPair.getPrivate());
+            return cipher.doFinal(cipherText);
+        } catch (Exception e) {
+            throw new RuntimeException("RSA decryption failed", e);
+        }
     }
 }

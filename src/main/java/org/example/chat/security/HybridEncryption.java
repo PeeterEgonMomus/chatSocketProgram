@@ -44,8 +44,9 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class HybridEncryption {
 
-    private final RSAEncryption rsa;
-    private final Map<ClientHandler, AESEncryption> sessions = new ConcurrentHashMap<>();
+    private final AsymmetricEncryption rsa;
+    private final Map<ClientHandler, SymmetricEncryption> sessions =
+            new ConcurrentHashMap<>();
 
     public HybridEncryption(RSAEncryption rsa) {
         this.rsa = rsa;
@@ -59,9 +60,14 @@ public class HybridEncryption {
 
     public void registerClientAESKey(ClientHandler client, String encryptedAESKeyBase64) {
         try {
-            byte[] aesBytes = rsa.decryptToBytes(encryptedAESKeyBase64);
-            String aesKeyBase64 = Base64.getEncoder().encodeToString(aesBytes);
-            sessions.put(client, new AESEncryption(aesKeyBase64));
+            byte[] encryptedBytes = Base64.getDecoder().decode(encryptedAESKeyBase64);
+            byte[] aesKeyBytes = rsa.decrypt(encryptedBytes);
+
+            if (aesKeyBytes.length != 32) {
+                throw new IllegalStateException("Invalid AES-256 key size");
+            }
+
+            sessions.put(client, new AESEncryption(aesKeyBytes));
             Logger.info("AES session established for client " + client);
         } catch (RuntimeException e) {
             Logger.error("Failed to register AES key for " + client, e);
@@ -71,8 +77,8 @@ public class HybridEncryption {
 
     /* ================= SESSION (AES ONLY) ================= */
 
-    private AESEncryption getSession(ClientHandler client) {
-        AESEncryption aes = sessions.get(client);
+    private SymmetricEncryption getSession(ClientHandler client) {
+        SymmetricEncryption aes = sessions.get(client);
         if (aes == null)
             throw new IllegalStateException("AES session not established for " + client);
         return aes;
@@ -80,14 +86,14 @@ public class HybridEncryption {
 
     public byte[] encryptBytesForClient(ClientHandler client, FrameType type, byte[] payload) {
         byte[] aad = type.name().getBytes(StandardCharsets.UTF_8);
-        byte[] encrypted = getSession(client).encryptBytes(payload, aad);
+        byte[] encrypted = getSession(client).encrypt(payload, aad);
         Logger.debug("Encrypted " + type + " for " + client);
         return encrypted;
     }
 
     public byte[] decryptBytesFromClient(ClientHandler client, FrameType type, byte[] payload) {
         byte[] aad = type.name().getBytes(StandardCharsets.UTF_8);
-        byte[] decrypted = getSession(client).decryptBytes(payload, aad);
+        byte[] decrypted = getSession(client).decrypt(payload, aad);
         Logger.debug("Decrypted " + type + " from " + client);
         return decrypted;
     }

@@ -108,6 +108,7 @@ public class FrameRouter {
      * - Decryption access
      * - Input stream helpers
      * - Send helpers
+     * - Send helpers
      */
     public void route(ClientHandler client, Frame frame) throws Exception {
 
